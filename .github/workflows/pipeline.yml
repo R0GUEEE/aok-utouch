@@ -1,0 +1,262 @@
+name: pipeline
+
+# Three build products, each with its own cache key derived from content:
+#   deps    ios-sysroot (glib, pixman, pcre2, libffi)  ~15 min cold
+#   engine  libqemu-system-aarch64.a + headers + fw    ~45 min cold
+#   app     AokVM-unsigned.ipa                        ~3 min warm
+# The image is built on an arm64 Linux runner in parallel and is independent of
+# the macOS toolchain.
+#
+# Everything that can be pre-compiled is: nothing on the app path is rebuilt
+# unless the hash of its inputs changed (scripts/hash.sh).
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**"]
+  pull_request:
+    paths-ignore: ["**.md", "docs/**"]
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: Ignore caches and rebuild deps + engine
+        type: boolean
+        default: false
+      publish_prebuilt:
+        description: Attach deps + engine tarballs to a prebuilt-* release
+        type: boolean
+        default: false
+      build_image:
+        description: Build the Ubuntu Touch disk image
+        type: boolean
+        default: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  # QEMU's configure is noisy; keep the log but do not let it hide failures.
+  CI: "true"
+
+jobs:
+  deps:
+    name: deps (ios-sysroot)
+    runs-on: macos-15
+    timeout-minutes: 60
+    outputs:
+      hash: ${{ steps.hash.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        # ninja, pkg-config and python3 are on the runner image already; meson
+        # from PyPI is seconds, brew's meson pulls a dependency tree. No
+        # xcodegen here: this job never builds the app.
+        run: |
+          python3 -m pip install --break-system-packages meson
+          meson --version && ninja --version && xcodebuild -version
+
+      - id: hash
+        name: Hash deps inputs
+        run: echo "hash=$(./scripts/hash.sh deps)" >> "$GITHUB_OUTPUT"
+
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: build/ios-sysroot
+          key: ios-deps-${{ steps.hash.outputs.hash }}
+
+      - name: Build dependencies
+        if: steps.cache.outputs.cache-hit != 'true' || inputs.force_rebuild
+        run: PACK=1 ./scripts/05-build-deps.sh
+
+      - name: Repack on cache hit
+        if: steps.cache.outputs.cache-hit == 'true' && !inputs.force_rebuild
+        run: PACK=1 ./scripts/05-build-deps.sh
+
+      - name: Inventory
+        run: |
+          find build/ios-sysroot/lib -name '*.a' -exec ls -lh {} \; | awk '{print $5, $9}'
+          ls -lh build/prebuilt/ || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-sysroot
+          path: build/prebuilt/ios-sysroot-*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  engine:
+    name: engine (libqemu-system-aarch64.a)
+    needs: deps
+    runs-on: macos-15
+    timeout-minutes: 120
+    outputs:
+      hash: ${{ steps.hash.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: python3 -m pip install --break-system-packages meson
+
+      - name: Restore deps
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-sysroot
+          path: build/prebuilt
+
+      - name: Unpack deps
+        run: |
+          mkdir -p build
+          tar -xzf build/prebuilt/ios-sysroot-*.tar.gz -C build
+          du -sh build/ios-sysroot
+
+      - id: hash
+        name: Hash engine inputs
+        # `git ls-remote` gives the branch tip without a 700 MB clone, so a
+        # cache hit costs one API round trip instead of a checkout.
+        run: |
+          commit="$(git ls-remote --heads https://github.com/emkey1/qemu.git aok-vm | cut -f1)"
+          echo "qemu tip: $commit"
+          echo "AOK_QEMU_COMMIT=$commit" >> "$GITHUB_ENV"
+          echo "hash=$(AOK_QEMU_COMMIT=$commit ./scripts/hash.sh qemu)" >> "$GITHUB_OUTPUT"
+
+      - id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            build/qemu-ios
+            build/qemu-headers
+            build/firmware
+          key: qemu-engine-${{ steps.hash.outputs.hash }}
+
+      - name: Build engine
+        if: steps.cache.outputs.cache-hit != 'true' || inputs.force_rebuild
+        run: |
+          ./scripts/00-fetch.sh
+          PACK=1 ./scripts/10-build-qemu-ios.sh
+
+      - name: Repack on cache hit
+        if: steps.cache.outputs.cache-hit == 'true' && !inputs.force_rebuild
+        run: PACK=1 ./scripts/10-build-qemu-ios.sh
+
+      - name: Report
+        run: |
+          ls -lh build/qemu-ios/libqemu-system-aarch64.a
+          ls -lh build/firmware/ || true
+          grep -c . build/qemu-headers/config-host.h >/dev/null && echo "headers staged"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qemu-engine
+          path: build/prebuilt/qemu-aarch64-ios-*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  app:
+    name: app (unsigned .ipa)
+    needs: [deps, engine]
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: brew install xcodegen
+
+      - name: Restore prebuilt deps and engine
+        uses: actions/download-artifact@v4
+        with:
+          path: build/prebuilt
+          pattern: "*"
+          merge-multiple: true
+
+      - name: Unpack
+        run: |
+          mkdir -p build
+          tar -xzf build/prebuilt/ios-sysroot-*.tar.gz -C build
+          ./scripts/09-restore-engine.sh "$(ls build/prebuilt/qemu-aarch64-ios-*.tar.gz | head -1)"
+          ls -lh build/qemu-ios/libqemu-system-aarch64.a build/qemu-headers/config-host.h
+
+      - name: Build
+        # No QEMU checkout, no glib build, no meson: only Swift, C and the .metal
+        # shaders are compiled here.
+        run: ./scripts/30-build-app.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AokVM-unsigned.ipa
+          path: |
+            dist/*.ipa
+            dist/*.sha256
+          if-no-files-found: error
+
+      - name: Build log
+        if: failure()
+        run: tail -120 build/xcodebuild.log || true
+
+  image:
+    name: image (ut-2404-arm64.img)
+    if: github.event_name != 'workflow_dispatch' || inputs.build_image
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap parted dosfstools e2fsprogs mtools \
+            grub-efi-arm64-bin qemu-utils
+
+      - name: Build image
+        run: sudo ./scripts/20-make-ut-image.sh "$PWD/build/ut/ut-2404-arm64.img"
+
+      - name: Report
+        run: |
+          ls -lh build/ut/
+          sudo losetup -f --show -P build/ut/ut-2404-arm64.img || true
+          sudo partx -s build/ut/ut-2404-arm64.img || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ut-2404-arm64.img
+          path: build/ut/ut-2404-arm64.img
+          compression-level: 0
+
+  publish:
+    name: publish prebuilt artefacts
+    needs: [deps, engine]
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_prebuilt
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: prebuilt
+          pattern: "*"
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="prebuilt-${{ needs.deps.outputs.hash }}-${{ needs.engine.outputs.hash }}"
+          echo "tag: $TAG"
+          ls -lh prebuilt
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" prebuilt/*.tar.gz --clobber
+          else
+            gh release create "$TAG" prebuilt/*.tar.gz \
+              --title "Prebuilt toolchain $TAG" \
+              --notes "ios-sysroot (glib/pixman/pcre2/libffi) and libqemu-system-aarch64.a for aok-utouch.
+
+          Use with:
+              AOK_PREBUILT_DEPS=https://github.com/${{ github.repository }}/releases/download/$TAG/ios-sysroot-${{ needs.deps.outputs.hash }}.tar.gz ./scripts/05-build-deps.sh
+              ./scripts/09-restore-engine.sh https://github.com/${{ github.repository }}/releases/download/$TAG/qemu-aarch64-ios-${{ needs.engine.outputs.hash }}.tar.gz"
+          fi

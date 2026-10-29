@@ -1,0 +1,65 @@
+name: AokVM
+options:
+  bundleIdPrefix: com.aok
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    CLANG_ENABLE_MODULES: YES
+    ENABLE_BITCODE: NO
+    # The engine is GPLv2-or-later; the app links it statically.
+    GCC_C_LANGUAGE_STANDARD: gnu11
+    OTHER_LDFLAGS: -lc++ -lz
+    HEADER_SEARCH_PATHS:
+      - $(SRCROOT)/../build/qemu-headers/include
+      - $(SRCROOT)/../build/qemu-headers
+      - $(SRCROOT)/../build/qemu-ios
+      - $(SRCROOT)/../build/ios-sysroot/include
+      - $(SRCROOT)/../build/ios-sysroot/include/glib-2.0
+      - $(SRCROOT)/../build/ios-sysroot/lib/glib-2.0/include
+    LIBRARY_SEARCH_PATHS:
+      - $(SRCROOT)/../build/qemu-ios
+      - $(SRCROOT)/../build/ios-sysroot/lib
+
+targets:
+  AokVM:
+    type: application
+    platform: iOS
+    sources:
+      - path: AokVM
+      - path: ../engine/aok-ios/aok_ios.c
+        name: engine
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aok.vm
+        PRODUCT_NAME: AokVM
+        INFOPLIST_FILE: AokVM/Info.plist
+        CODE_SIGN_ENTITLEMENTS: AokVM/AokVM.entitlements
+        SWIFT_OBJC_BRIDGING_HEADER: AokVM/Bridging-Header.h
+        TARGETED_DEVICE_FAMILY: "1,2"
+        # QEMU's own headers and our glue are C99/C11 with GNU extensions.
+        OTHER_CFLAGS: -Wno-everything -D_GNU_SOURCE -DHAVE_CONFIG_H
+        OTHER_LDFLAGS:
+          # force_load, not -l: QEMU registers devices, machines and TCG backends
+          # from per-object constructors. Without force_load the linker drops
+          # every object nothing calls directly and the machine type vanishes.
+          - -Wl,-force_load,$(SRCROOT)/../build/qemu-ios/libqemu-system-aarch64.a
+          - -lglib-2.0
+          - -lgthread-2.0
+          - -lgobject-2.0
+          - -lgio-2.0
+          - -lgmodule-2.0
+          - -lpixman-1
+          - -liconv
+          - -lz
+          - -lc++
+          - -framework Metal
+          - -framework MetalKit
+          - -framework CoreVideo
+          - -framework IOSurface
+          - -framework CoreFoundation

@@ -1,0 +1,7 @@
+build/
+dist/
+src/
+versions.env
+*.ipa
+*.img
+.DS_Store

@@ -1,0 +1,30 @@
+aok-utouch
+==========
+
+The application links QEMU statically, which makes the resulting binary a
+covered work under the GNU General Public License, version 2 or later.
+
+QEMU is not vendored in this repository. `scripts/00-fetch.sh` clones
+
+    https://github.com/emkey1/qemu   branch aok-vm   (a fork of QEMU 11.1.2)
+
+and `versions.env` (written by that script, committed by CI) pins the exact
+commit each build used. That commit, together with the unmodified upstream
+sources and the two edits the script applies (documented inline in
+`scripts/00-fetch.sh`: renaming `main()` in `system/vl.c`, and nothing else),
+is the complete corresponding source for the engine in any binary we ship.
+
+Also linked or embedded:
+
+  glib, pixman, pcre2, libffi     LGPL-2.1+ / MIT / BSD / MIT
+  edk2 (pflash firmware blobs)    BSD-2-Clause-Patent
+  Ubuntu 24.04 userland           various free licences, shipped as a disk image
+  Lomiri / Ubuntu Touch packages  GPL-3.0, LGPL-3.0, various
+
+Each is used unmodified from its upstream release archive or distribution
+package; the download URLs and versions are in `deps/manifest.env` and
+`scripts/20-make-ut-image.sh`.
+
+The gadget sources under `tcg/` and `target/*/tcg/aok/` in the engine are
+GPL-2.0-or-later, a dual grant from iSH-AOK that exists so QEMU (GPLv2) can
+build them. See `emkey1/aok-gadgets` README for the provenance.

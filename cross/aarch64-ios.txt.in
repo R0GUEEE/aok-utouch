@@ -1,0 +1,29 @@
+# Meson cross file for iPhoneOS arm64. @SDKROOT@ and @MIN@ are substituted by
+# scripts/05-build-deps.sh into build/cross-aarch64-ios.txt — meson cross files
+# cannot shell out to `xcrun`, so the SDK path has to be baked in.
+[binaries]
+c       = ['xcrun', '--sdk', 'iphoneos', 'clang']
+cpp     = ['xcrun', '--sdk', 'iphoneos', 'clang++']
+objc    = ['xcrun', '--sdk', 'iphoneos', 'clang']
+ar      = ['xcrun', '--sdk', 'iphoneos', 'ar']
+ranlib  = ['xcrun', '--sdk', 'iphoneos', 'ranlib']
+strip   = ['xcrun', '--sdk', 'iphoneos', 'strip']
+pkg-config = 'pkg-config'
+
+[host_machine]
+system     = 'darwin'
+cpu_family = 'aarch64'
+cpu        = 'arm64'
+endian     = 'little'
+
+[properties]
+needs_exe_wrapper = true
+# glib's tests and QEMU's build-time helpers cannot run on the host, so every
+# build that uses this file must also disable tests.
+pkg_config_libdir = '@PREFIX@/lib/pkgconfig'
+
+[built-in options]
+c_args       = ['-arch', 'arm64', '-isysroot', '@SDKROOT@', '-miphoneos-version-min=@MIN@', '-O3', '-fPIC', '-D_GNU_SOURCE']
+cpp_args     = ['-arch', 'arm64', '-isysroot', '@SDKROOT@', '-miphoneos-version-min=@MIN@', '-O3', '-fPIC', '-D_GNU_SOURCE']
+c_link_args  = ['-arch', 'arm64', '-isysroot', '@SDKROOT@', '-miphoneos-version-min=@MIN@']
+cpp_link_args = ['-arch', 'arm64', '-isysroot', '@SDKROOT@', '-miphoneos-version-min=@MIN@']
