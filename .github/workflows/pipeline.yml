@@ -149,8 +149,9 @@ jobs:
 
       - name: Report
         run: |
-          ls -lh build/qemu-ios/libqemu-system-aarch64.a
-          ls -lh build/firmware/ || true
+          echo "link inputs: $(wc -l < build/qemu-ios/engine-link-inputs.txt)"
+          echo "objects:     $(find build/qemu-ios/flatten -name '*.o' | wc -l)"
+          ls -lh build/qemu-ios/BUILDINFO build/firmware/ || true
           grep -c . build/qemu-headers/config-host.h >/dev/null && echo "headers staged"
 
       - uses: actions/upload-artifact@v4
