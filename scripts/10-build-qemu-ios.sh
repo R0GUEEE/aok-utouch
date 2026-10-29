@@ -39,7 +39,7 @@ pack() {
 
 # The cache path must not need a QEMU checkout: CI restores the library and the
 # staged headers from a cache or an artifact and never clones the source.
-if [ -f "$OUT/libqemu-system-aarch64.a" ] && [ -f "$STAMP" ] && [ "${FORCE:-0}" != 1 ]; then
+if [ -s "$OUT/engine-link-inputs.txt" ] && [ -f "$STAMP" ] && [ "${FORCE:-0}" != 1 ]; then
     banner "engine ${HASH} already built"
     [ "${PACK:-0}" = "1" ] && pack
     exit 0
