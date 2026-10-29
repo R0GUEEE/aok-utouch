@@ -206,13 +206,14 @@ banner "stage headers for the app"
 HDR="$BUILD/qemu-headers"
 rm -rf "$HDR"; mkdir -p "$HDR"
 cp -R "$SRC/include" "$HDR/include"
-cp "$OUT/config-host.h" "$HDR/"
+# Every generated header at the top of the build dir: config-host.h,
+# config-poison.h (included by include/exec/poison.h), config-target.h,
+# qemu-version.h and whatever else meson decides to emit.
+cp "$OUT"/*.h "$HDR/" 2>/dev/null || true
 if [ -d "$OUT/qapi" ]; then
     cp -R "$OUT/qapi" "$HDR/qapi"
 fi
-for extra in qemu-version.h config-target.h; do
-    [ -f "$OUT/$extra" ] && cp "$OUT/$extra" "$HDR/"
-done
+ls "$HDR" | sed 's/^/  /' 
 du -sh "$HDR"
 
 date -u +%Y-%m-%dT%H:%M:%SZ > "$STAMP"
