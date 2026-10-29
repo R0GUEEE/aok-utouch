@@ -123,6 +123,7 @@ final class ScanoutView: UIView {
     private var pipeline: MTLRenderPipelineState?
     private var textureCache: CVMetalTextureCache?
     private var texture: MTLTexture?
+    private var pixelBuffer: CVPixelBuffer?
     private var textureGeneration = -1
     private var displayLink: CADisplayLink?
     private var targetFPS = 60
@@ -169,14 +170,14 @@ final class ScanoutView: UIView {
     func startDisplayLink() {
         guard displayLink == nil else { return }
         let link = CADisplayLink(target: self, selector: #selector(tick))
-        link.preferredMaximumFramesPerSecond = targetFPS
+        link.preferredFramesPerSecond = targetFPS
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
 
     func setTargetFPS(_ fps: Int) {
         targetFPS = fps
-        displayLink?.preferredMaximumFramesPerSecond = fps
+        displayLink?.preferredFramesPerSecond = fps
     }
 
     override func layoutSubviews() {
@@ -198,9 +199,24 @@ final class ScanoutView: UIView {
 
     private func rebuildTexture(generation: Int) {
         guard let cache = textureCache, let surface = sink.ioSurface else { return }
+
+        // CVMetalTextureCacheCreateTextureFromImage takes a CVImageBuffer, not
+        // an IOSurface; wrap it. The wrap is zero-copy - both sides point at the
+        // same memory the engine is writing into.
+        var buffer: CVPixelBuffer?
+        let attributes: [CFString: Any] = [
+            kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
+        ]
+        guard CVPixelBufferCreateWithIOSurface(kCFAllocatorDefault, surface,
+                                               attributes as CFDictionary,
+                                               &buffer) == kCVReturnSuccess,
+              let buffer else { return }
+        pixelBuffer = buffer
+
         var cvTexture: CVMetalTexture?
         let status = CVMetalTextureCacheCreateTextureFromImage(
-            kCFAllocatorDefault, cache, surface, nil, .bgra8Unorm,
+            kCFAllocatorDefault, cache, buffer, nil, .bgra8Unorm,
             sink.width, sink.height, 0, &cvTexture)
         guard status == kCVReturnSuccess, let cvTexture,
               let metal = CVMetalTextureGetTexture(cvTexture) else { return }
