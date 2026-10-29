@@ -203,15 +203,18 @@ final class ScanoutView: UIView {
         // CVMetalTextureCacheCreateTextureFromImage takes a CVImageBuffer, not
         // an IOSurface; wrap it. The wrap is zero-copy - both sides point at the
         // same memory the engine is writing into.
-        var buffer: CVPixelBuffer?
+        // The CF "create" functions import Swift as writing an Unmanaged
+        // pointer; we own the reference the function returns.
+        var unmanaged: Unmanaged<CVPixelBuffer>?
         let attributes: [CFString: Any] = [
             kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA,
             kCVPixelBufferIOSurfacePropertiesKey: [:] as CFDictionary,
         ]
         guard CVPixelBufferCreateWithIOSurface(kCFAllocatorDefault, surface,
                                                attributes as CFDictionary,
-                                               &buffer) == kCVReturnSuccess,
-              let buffer else { return }
+                                               &unmanaged) == kCVReturnSuccess,
+              let unmanaged else { return }
+        let buffer = unmanaged.takeRetainedValue()
         pixelBuffer = buffer
 
         var cvTexture: CVMetalTexture?
