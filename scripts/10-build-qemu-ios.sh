@@ -73,6 +73,10 @@ echo "CC=$CC"
 echo "SDK=$SDKROOT"
 
 banner "configure"
+# Subprojects (dtc/libfdt, keycodemapdb, berkeley-softfloat, libslirp) are
+# downloaded by meson rather than pinned as git submodules: QEMU's .gitmodules
+# marks the ROM submodules "update = none", and the ones that matter are wraps.
+#
 # A note on the two interesting flags:
 #   --enable-tcg-threaded-interpreter  makes the TCG code buffer data, not code
 #   --enable-aok-gadgets               one gadget per guest instruction, AArch64
@@ -99,7 +103,6 @@ if [ ! -f "$OUT/config-host.mak" ]; then
         --disable-vhost-user --disable-vhost-vdpa --disable-vhost-net \
         --disable-capstone --disable-fuse --disable-fuse-lseek \
         --disable-virtfs --disable-qed \
-        --disable-download \
         --prefix="$OUT/install" \
         2>&1 | tee "$BUILD/configure-logs/qemu-ios.log"
 else
