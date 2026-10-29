@@ -62,7 +62,7 @@ jobs:
 
       - id: hash
         name: Hash deps inputs
-        run: echo "hash=$(./scripts/hash.sh deps)" >> "$GITHUB_OUTPUT"
+        run: echo "hash=$(bash scripts/hash.sh deps)" >> "$GITHUB_OUTPUT"
 
       - id: cache
         uses: actions/cache@v4
@@ -72,11 +72,11 @@ jobs:
 
       - name: Build dependencies
         if: steps.cache.outputs.cache-hit != 'true' || inputs.force_rebuild
-        run: PACK=1 ./scripts/05-build-deps.sh
+        run: PACK=1 bash scripts/05-build-deps.sh
 
       - name: Repack on cache hit
         if: steps.cache.outputs.cache-hit == 'true' && !inputs.force_rebuild
-        run: PACK=1 ./scripts/05-build-deps.sh
+        run: PACK=1 bash scripts/05-build-deps.sh
 
       - name: Inventory
         run: |
@@ -123,7 +123,7 @@ jobs:
           commit="$(git ls-remote --heads https://github.com/emkey1/qemu.git aok-vm | cut -f1)"
           echo "qemu tip: $commit"
           echo "AOK_QEMU_COMMIT=$commit" >> "$GITHUB_ENV"
-          echo "hash=$(AOK_QEMU_COMMIT=$commit ./scripts/hash.sh qemu)" >> "$GITHUB_OUTPUT"
+          echo "hash=$(AOK_QEMU_COMMIT=$commit bash scripts/hash.sh qemu)" >> "$GITHUB_OUTPUT"
 
       - id: cache
         uses: actions/cache@v4
@@ -137,12 +137,12 @@ jobs:
       - name: Build engine
         if: steps.cache.outputs.cache-hit != 'true' || inputs.force_rebuild
         run: |
-          ./scripts/00-fetch.sh
-          PACK=1 ./scripts/10-build-qemu-ios.sh
+          bash scripts/00-fetch.sh
+          PACK=1 bash scripts/10-build-qemu-ios.sh
 
       - name: Repack on cache hit
         if: steps.cache.outputs.cache-hit == 'true' && !inputs.force_rebuild
-        run: PACK=1 ./scripts/10-build-qemu-ios.sh
+        run: PACK=1 bash scripts/10-build-qemu-ios.sh
 
       - name: Report
         run: |
@@ -179,13 +179,13 @@ jobs:
         run: |
           mkdir -p build
           tar -xzf build/prebuilt/ios-sysroot-*.tar.gz -C build
-          ./scripts/09-restore-engine.sh "$(ls build/prebuilt/qemu-aarch64-ios-*.tar.gz | head -1)"
+          bash scripts/09-restore-engine.sh "$(ls build/prebuilt/qemu-aarch64-ios-*.tar.gz | head -1)"
           ls -lh build/qemu-ios/libqemu-system-aarch64.a build/qemu-headers/config-host.h
 
       - name: Build
         # No QEMU checkout, no glib build, no meson: only Swift, C and the .metal
         # shaders are compiled here.
-        run: ./scripts/30-build-app.sh
+        run: bash scripts/30-build-app.sh
 
       - uses: actions/upload-artifact@v4
         with:
@@ -214,7 +214,7 @@ jobs:
             grub-efi-arm64-bin qemu-utils
 
       - name: Build image
-        run: sudo ./scripts/20-make-ut-image.sh "$PWD/build/ut/ut-2404-arm64.img"
+        run: sudo bash scripts/20-make-ut-image.sh "$PWD/build/ut/ut-2404-arm64.img"
 
       - name: Report
         run: |
@@ -257,6 +257,6 @@ jobs:
               --notes "ios-sysroot (glib/pixman/pcre2/libffi) and libqemu-system-aarch64.a for aok-utouch.
 
           Use with:
-              AOK_PREBUILT_DEPS=https://github.com/${{ github.repository }}/releases/download/$TAG/ios-sysroot-${{ needs.deps.outputs.hash }}.tar.gz ./scripts/05-build-deps.sh
-              ./scripts/09-restore-engine.sh https://github.com/${{ github.repository }}/releases/download/$TAG/qemu-aarch64-ios-${{ needs.engine.outputs.hash }}.tar.gz"
+              AOK_PREBUILT_DEPS=https://github.com/${{ github.repository }}/releases/download/$TAG/ios-sysroot-${{ needs.deps.outputs.hash }}.tar.gz bash scripts/05-build-deps.sh
+              bash scripts/09-restore-engine.sh https://github.com/${{ github.repository }}/releases/download/$TAG/qemu-aarch64-ios-${{ needs.engine.outputs.hash }}.tar.gz"
           fi

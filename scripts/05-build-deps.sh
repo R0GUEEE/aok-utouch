@@ -20,7 +20,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PREFIX="${ROOT}/build/ios-sysroot"
 DEPS="${ROOT}/build/deps"
 PREBUILT_DIR="${ROOT}/build/prebuilt"
-HASH="$("${ROOT}/scripts/hash.sh" deps)"
+HASH="$(bash "${ROOT}/scripts/hash.sh" deps)"
 STAMP="${PREFIX}/.aok-deps-${HASH}"
 TARBALL="${PREBUILT_DIR}/ios-sysroot-${HASH}.tar.gz"
 
@@ -52,7 +52,7 @@ if [ -n "${AOK_PREBUILT_DEPS:-}" ]; then
     echo "warning: prebuilt tarball does not carry stamp ${HASH}; rebuilding" >&2
 fi
 
-CROSS="$("${ROOT}/scripts/04-cross-file.sh")"
+CROSS="$(bash "${ROOT}/scripts/04-cross-file.sh")"
 SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
 echo "cross file: $CROSS"
 
@@ -82,21 +82,27 @@ ninja -C "${DEPS}/pixman-build" install
 banner "pcre2 ${PCRE2_VERSION}"
 fetch "pcre2-${PCRE2_VERSION}" \
   "https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${PCRE2_VERSION}/pcre2-${PCRE2_VERSION}.tar.gz" pcre2.tar.gz
-CC="xcrun --sdk iphoneos clang -arch arm64 -isysroot ${SDKROOT} -miphoneos-version-min=${IOS_MIN}" \
-    "${DEPS}/pcre2-${PCRE2_VERSION}/configure" \
-    --host=aarch64-apple-darwin --prefix="$PREFIX" \
-    --disable-shared --enable-static --with-pic \
-    --disable-pcre2grep --disable-pcre2test --disable-pcre2grep-libz
-make -C "${DEPS}/pcre2-${PCRE2_VERSION}" -j"$(sysctl -n hw.ncpu)" install
+# Out-of-tree: calling configure by path from another directory writes the
+# Makefiles into the *current* directory, which is not where make looks.
+mkdir -p "${DEPS}/pcre2-build"
+( cd "${DEPS}/pcre2-build" &&
+  CC="xcrun --sdk iphoneos clang -arch arm64 -isysroot ${SDKROOT} -miphoneos-version-min=${IOS_MIN}" \
+      "${DEPS}/pcre2-${PCRE2_VERSION}/configure" \
+      --host=aarch64-apple-darwin --prefix="$PREFIX" \
+      --disable-shared --enable-static --with-pic \
+      --disable-pcre2grep --disable-pcre2test --disable-pcre2grep-libz &&
+  make -j"$(sysctl -n hw.ncpu)" install )
 
 banner "libffi ${LIBFFI_VERSION}"
 fetch "libffi-${LIBFFI_VERSION}" \
   "https://github.com/libffi/libffi/releases/download/v${LIBFFI_VERSION}/libffi-${LIBFFI_VERSION}.tar.gz" libffi.tar.gz
-CC="xcrun --sdk iphoneos clang -arch arm64 -isysroot ${SDKROOT} -miphoneos-version-min=${IOS_MIN}" \
-    "${DEPS}/libffi-${LIBFFI_VERSION}/configure" \
-    --host=aarch64-apple-darwin --prefix="$PREFIX" \
-    --disable-shared --enable-static --with-pic
-make -C "${DEPS}/libffi-${LIBFFI_VERSION}" -j"$(sysctl -n hw.ncpu)" install
+mkdir -p "${DEPS}/libffi-build"
+( cd "${DEPS}/libffi-build" &&
+  CC="xcrun --sdk iphoneos clang -arch arm64 -isysroot ${SDKROOT} -miphoneos-version-min=${IOS_MIN}" \
+      "${DEPS}/libffi-${LIBFFI_VERSION}/configure" \
+      --host=aarch64-apple-darwin --prefix="$PREFIX" \
+      --disable-shared --enable-static --with-pic &&
+  make -j"$(sysctl -n hw.ncpu)" install )
 
 banner "glib ${GLIB_VERSION}"
 GLIB_SERIES="${GLIB_VERSION%.*}"

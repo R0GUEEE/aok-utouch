@@ -41,8 +41,8 @@ check:
 	@test -d src/qemu || echo "note: sources not fetched yet"
 	@command -v xcodegen >/dev/null && (cd app && xcodegen dump --spec project.yml >/dev/null && echo "project.yml ok") || true
 	@python3 -c "import yaml,sys; yaml.safe_load(open('.github/workflows/pipeline.yml')); print('pipeline.yml ok')"
-	@echo "deps hash:   $$(./scripts/hash.sh deps)"
-	@echo "engine hash: $$(./scripts/hash.sh qemu)"
+	@echo "deps hash:   $$(bash scripts/hash.sh deps)"
+	@echo "engine hash: $$(bash scripts/hash.sh qemu)"
 
 clean:
 	rm -rf build/app build/ipa-stage dist

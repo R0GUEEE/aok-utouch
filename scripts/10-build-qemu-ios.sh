@@ -18,7 +18,7 @@ banner() { printf '\n== %s\n' "$*"; }
 [ -d "$SRC" ] || { echo "run scripts/00-fetch.sh first" >&2; exit 1; }
 # The sysroot is restored from a prebuilt tarball in CI, so the cross file has
 # to be regenerable without running the dependency build.
-CROSS="$("${ROOT}/scripts/04-cross-file.sh")"
+CROSS="$(bash "${ROOT}/scripts/04-cross-file.sh")"
 [ -d "$PREFIX" ] && [ -n "$(ls -A "$PREFIX")" ] || {
     echo "no sysroot at $PREFIX — run scripts/05-build-deps.sh or restore a prebuilt one" >&2
     exit 1; }
@@ -28,7 +28,7 @@ command -v ninja >/dev/null || { echo "ninja missing: brew install ninja" >&2; e
 export PKG_CONFIG_LIBDIR="${PREFIX}/lib/pkgconfig"
 export PKG_CONFIG_PATH=""
 
-HASH="$("${ROOT}/scripts/hash.sh" qemu)"
+HASH="$(bash "${ROOT}/scripts/hash.sh" qemu)"
 STAMP="${OUT}/.aok-qemu-${HASH}"
 TARBALL="${BUILD}/prebuilt/qemu-aarch64-ios-${HASH}.tar.gz"
 

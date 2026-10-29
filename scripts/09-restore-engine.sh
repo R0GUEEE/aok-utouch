@@ -35,7 +35,7 @@ banner "verify"
 cat "${ROOT}/build/qemu-ios/BUILDINFO" 2>/dev/null || echo "(no BUILDINFO in tarball)"
 HAVE="$(sed -n 's/^hash=//p' "${ROOT}/build/qemu-ios/BUILDINFO" 2>/dev/null || true)"
 if [ -d "${ROOT}/src/qemu/.git" ]; then
-    WANT="$("${ROOT}/scripts/hash.sh" qemu)"
+    WANT="$(bash "${ROOT}/scripts/hash.sh" qemu)"
     if [ "$WANT" = "$HAVE" ]; then
         echo "hash matches the current checkout: $WANT"
     else

@@ -8,8 +8,6 @@
 #               grub-efi-arm64-bin qemu-utils
 #
 #   sudo ./scripts/20-make-ut-image.sh [output.img]
-#
-# --keep-root leaves build/ut/root mounted-free but intact for inspection.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,11 +19,8 @@ MIRROR="${MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
 SUITE="${SUITE:-noble}"
 UT_SUITE="${UT_SUITE:-24.04-1.x}"
 UT_KEY_URL="https://repo.ubports.com/keyring.gpg"
-KEEP_ROOT=0
-[ "${2:-}" = "--keep-root" ] && KEEP_ROOT=1
 
 WORK="$(dirname "$OUT")"
-ROOTDIR="${WORK}/root"
 MNT="${WORK}/mnt"
 LOOP=""
 
@@ -74,22 +69,17 @@ ROOTDEV="${LOOP}p2"; ESPDEV="${LOOP}p1"
 mkfs.vfat -F 32 -n ESP "$ESPDEV" >/dev/null
 mkfs.ext4 -q -L ut-root -O ^has_journal -m 1 "$ROOTDEV"
 
-banner "debootstrap ${SUITE}/${ARCH}"
-if [ ! -x "${ROOTDIR}/debootstrap/debootstrap" ] && [ ! -d "${ROOTDIR}/usr/bin" ]; then
-    mkdir -p "$ROOTDIR"
-    debootstrap --arch="$ARCH" --variant=minbase --foreign "$SUITE" "$ROOTDIR" "$MIRROR"
-fi
-
 mkdir -p "$MNT"
 mount "$ROOTDEV" "$MNT"
 mkdir -p "$MNT/boot/efi"
 mount "$ESPDEV" "$MNT/boot/efi"
 
-if [ -x "${ROOTDIR}/debootstrap/debootstrap" ]; then
-    banner "second stage"
-    cp /usr/bin/qemu-aarch64-static "$MNT/usr/bin/" 2>/dev/null || true
-    chroot "$MNT" /debootstrap/debootstrap --second-stage
-fi
+banner "debootstrap ${SUITE}/${ARCH}"
+# Straight onto the image's root, and no --foreign: the host is arm64 and so is
+# the target, so the second stage runs here. A staging directory would have to
+# be copied onto the mount afterwards, and a forgotten copy is exactly the kind
+# of failure that shows up three minutes into a 25-minute job.
+debootstrap --arch="$ARCH" --variant=minbase "$SUITE" "$MNT" "$MIRROR"
 
 banner "apt sources"
 cat > "$MNT/etc/apt/sources.list" <<EOF
@@ -254,10 +244,6 @@ trap - EXIT
 banner "result"
 ls -lh "$OUT"
 e2fsck -fn "${OUT}" 2>/dev/null | head -3 || true
-if [ "$KEEP_ROOT" = 1 ]; then
-    echo "root tree kept at $ROOTDIR (delete it before re-running debootstrap)"
-else
-    rm -rf "$ROOTDIR"
-fi
+rm -rf "$MNT"
 echo
 echo "Copy $(basename "$OUT") into the app's Documents (Files app, or the import button)."
