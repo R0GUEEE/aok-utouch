@@ -89,18 +89,17 @@ if [ ! -f "$OUT/config-host.mak" ]; then
         --enable-aok-gadgets \
         --enable-tcg-threaded-interpreter \
         --enable-slirp \
-        --disable-user --disable-bsd-user --disable-linux-user \
+        --disable-user --disable-bsd-user \
         --disable-tools --disable-docs --disable-guest-agent \
-        --disable-install-blobs \
+        --disable-werror \
         --disable-gtk --disable-sdl --disable-opengl --disable-virglrenderer \
         --disable-vnc --disable-spice --disable-curses --disable-cocoa \
         --disable-coreaudio --disable-pa --disable-alsa --disable-jack \
-        --disable-pulseaudio --disable-dbus-display --disable-qed \
+        --disable-pipewire --disable-dbus-display \
         --disable-vhost-user --disable-vhost-vdpa --disable-vhost-net \
-        --disable-capstone --disable-fdt-tests \
-        --disable-fuse --disable-fuse-lseek --disable-virtfs \
-        --disable-download --disable-docs \
-        --disable-werror \
+        --disable-capstone --disable-fuse --disable-fuse-lseek \
+        --disable-virtfs --disable-qed \
+        --disable-download \
         --prefix="$OUT/install" \
         2>&1 | tee "$BUILD/configure-logs/qemu-ios.log"
 else
