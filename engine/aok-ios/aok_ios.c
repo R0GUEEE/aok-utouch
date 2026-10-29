@@ -46,6 +46,7 @@ typedef struct AokState {
     int thread_valid;
     int running;
     int ready;
+    int paused;
     int failed;
 
     QemuConsole *con;
@@ -154,13 +155,17 @@ static void aok_event_deliver(AokEventKind kind, int a, int b)
         }
         break;
     case AOK_EV_PAUSE:
-        if (runstate_is_running()) {
+        /* QEMU 11 does not export a runstate_is_paused() to link against;
+           the app knows when it asked for a pause, so track it here. */
+        if (!S.paused) {
             vm_stop(RUN_STATE_PAUSED);
+            S.paused = 1;
         }
         break;
     case AOK_EV_RESUME:
-        if (runstate_is_paused()) {
+        if (S.paused) {
             vm_start();
+            S.paused = 0;
         }
         break;
     case AOK_EV_SHUTDOWN:

@@ -108,7 +108,7 @@ if [ ! -f "$OUT/config-host.mak" ]; then
         --disable-pipewire --disable-dbus-display \
         --disable-vhost-user --disable-vhost-vdpa --disable-vhost-net \
         --disable-capstone --disable-fuse --disable-fuse-lseek \
-        --disable-virtfs --disable-qed \
+        --disable-virtfs --disable-qed --disable-bzip2 \
         --prefix="$OUT/install" \
         2>&1 | tee "$BUILD/configure-logs/qemu-ios.log" )
 else

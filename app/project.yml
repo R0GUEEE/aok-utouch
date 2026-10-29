@@ -58,6 +58,11 @@ targets:
           - -lgmodule-2.0
           - -lpixman-1
           - -lslirp
+          # glib's own proxy-libintl (g_libintl_*), libffi for GObject closures,
+          # and the resolver glib's threaded DNS and slirp's get_dns_addr use.
+          - -lintl
+          - -lffi
+          - -lresolv
           - -liconv
           - -lz
           - -lc++
