@@ -221,6 +221,23 @@ else
         find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
     done
 
+    # Self-test before archiving: a *flat* set of objects that ld would link
+    # must not contain two definitions of the same symbol. If it does, the
+    # first-wins rule in this script is wrong and the failure would otherwise
+    # only show up as 221 duplicates at app link time, twenty minutes later.
+    DEFS="$OUT/flatten-defs.txt"
+    : > "$DEFS"
+    for obj in "$WORK"/*.o; do
+        xcrun nm -gU --defined-only "$obj" 2>/dev/null | awk '{print $3}' >> "$DEFS"
+    done
+    DUPS="$(sort "$DEFS" | uniq -d | wc -l | tr -d ' ')"
+    echo "duplicate global definitions across the flat set: $DUPS"
+    if [ "$DUPS" -gt 0 ]; then
+        sort "$DEFS" | uniq -d | head -20 >&2
+        echo "error: stubs and real definitions both survived; fix the ordering" >&2
+        exit 1
+    fi
+
     TOTAL="$(find "$WORK" -maxdepth 1 -name '*.o' | wc -l | tr -d ' ')"
     echo "flattened $TOTAL objects"
     [ "$TOTAL" -gt 700 ] || { echo "error: only $TOTAL objects flattened" >&2; exit 1; }
