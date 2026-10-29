@@ -136,22 +136,34 @@ fi
 echo "TCTI + AOK gadgets: OK"
 
 banner "static library"
-FA="$OUT/libqemu-system-aarch64.fa"
-if [ ! -f "$FA" ]; then
+LIB="$OUT/libqemu-system-aarch64.a"
+if [ -f "$LIB" ]; then
+    echo "reusing $LIB"
+else
+    # QEMU 11 no longer emits libqemu-system-aarch64.fa for a plain system
+    # build; the objects the link used are in the target's Meson private dir.
     FA="$(find "$OUT" -maxdepth 2 -name 'libqemu-system-aarch64*.fa' | head -1)"
-fi
-[ -f "$FA" ] || { echo "no libqemu-system-aarch64.fa produced" >&2; exit 1; }
+    if [ -n "$FA" ]; then
+        WORK="$OUT/fa-objects"
+        rm -rf "$WORK"; mkdir -p "$WORK"
+        ( cd "$WORK" && ar x "$FA" )
+        OBJDIR="$WORK"
+        echo "using $(basename "$FA")"
+    else
+        OBJDIR="$(find "$OUT" -maxdepth 1 -type d -name 'qemu-system-aarch64*.p' | head -1)"
+        [ -n "$OBJDIR" ] || { echo "no QEMU object directory in $OUT" >&2; exit 1; }
+        echo "using objects from $(basename "$OBJDIR")"
+    fi
 
-WORK="$OUT/fa-objects"
-rm -rf "$WORK"; mkdir -p "$WORK"
-( cd "$WORK" && ar x "$FA" )
-OBJ_COUNT="$(find "$WORK" -name '*.o' | wc -l | tr -d ' ')"
-echo "extracted $OBJ_COUNT objects from $(basename "$FA")"
-# libtool is Apple's archiver: produces an archive ld64 reads happily, unlike
-# the .fa that meson writes.
-( cd "$WORK" && xcrun libtool -static -o "$OUT/libqemu-system-aarch64.a" ./*.o )
-ls -lh "$OUT/libqemu-system-aarch64.a"
-rm -rf "$WORK"
+    OBJS="$(find "$OBJDIR" -name '*.o' | sort)"
+    OBJ_COUNT="$(printf '%s\n' "$OBJS" | wc -l | tr -d ' ')"
+    echo "$OBJ_COUNT objects"
+    [ "$OBJ_COUNT" -gt 100 ] || { echo "suspiciously few objects; refusing" >&2; exit 1; }
+    # libtool is Apple's archiver: ld64 reads its output happily.
+    xcrun libtool -static -o "$LIB" $OBJS
+    rm -rf "$OBJDIR"
+fi
+ls -lh "$LIB"
 
 banner "firmware blobs"
 mkdir -p "$BUILD/firmware"

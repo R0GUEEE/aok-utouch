@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 @main
+@MainActor
 struct AokVMApp: App {
     @StateObject private var runtime = VMRuntime()
     @Environment(\.scenePhase) private var scenePhase
