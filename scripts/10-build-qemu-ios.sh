@@ -199,14 +199,25 @@ else
     echo "third-party archives kept whole:"
     sed 's|^|  |' "$THIRD_PARTY"
 
+    # The link line already names ~1200 objects directly; that *is* meson's
+    # extract_all_objects() result, and it is the only thing that matters.
     WORK="$OUT/flatten"
     rm -rf "$WORK"; mkdir -p "$WORK"
+    while read -r input; do
+        case "$input" in
+            \#*) continue ;;
+            *.o)
+                cp "$OUT/$input" "$WORK/$(echo "$input" | tr '/' '_')" 2>/dev/null || true
+                ;;
+        esac
+    done < "$LIST"
+
+    # Anything still only reachable through a QEMU archive gets flattened too,
+    # after the direct objects, so the direct ones win any duplicate.
     while read -r archive; do
         EX="$WORK/.x"
         rm -rf "$EX"; mkdir -p "$EX"
         ( cd "$EX" && ar x "$archive" 2>/dev/null ) || continue
-        # First definition of a member name wins; QEMU's link order is the
-        # order meson listed the libraries in, which is what we read.
         find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
     done < "$QEMU_ARCHIVES"
 
