@@ -150,7 +150,19 @@ else
         OBJDIR="$WORK"
         echo "using $(basename "$FA")"
     else
-        OBJDIR="$(find "$OUT" -maxdepth 1 -type d -name 'qemu-system-aarch64*.p' | head -1)"
+        # Two .p dirs exist for this target: the "-unsigned" link step and the
+        # fat-archive one, which holds the ~2000 real objects. Take whichever
+        # has the most objects instead of trusting the first one find returns.
+        OBJDIR=""
+        BEST=0
+        for candidate in $(find "$OUT" -maxdepth 1 -type d -name 'qemu-system-aarch64*.p'); do
+            count="$(find "$candidate" -name '*.o' | wc -l | tr -d ' ')"
+            echo "  candidate $(basename "$candidate"): $count objects"
+            if [ "$count" -gt "$BEST" ]; then
+                BEST="$count"
+                OBJDIR="$candidate"
+            fi
+        done
         [ -n "$OBJDIR" ] || { echo "no QEMU object directory in $OUT" >&2; exit 1; }
         echo "using objects from $(basename "$OBJDIR")"
     fi
