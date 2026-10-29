@@ -118,10 +118,17 @@ ninja -C "$OUT" -j"${JOBS}" qemu-system-aarch64 2>&1 | tail -40
 
 banner "verify the two properties the whole port rests on"
 CONFIG_H="$OUT/config-host.h"
-grep -q 'define CONFIG_TCG_THREADED_INTERPRETER 1' "$CONFIG_H" || {
+# meson writes "#define NAME" for booleans and "#define NAME 1" for explicit
+# values, so match the symbol, not the value.
+grep -n 'TCG_THREADED_INTERPRETER\|AOK_GADGETS' "$CONFIG_H" || echo "(no TCG macros in $CONFIG_H)"
+grep -q 'define CONFIG_TCG_THREADED_INTERPRETER' "$CONFIG_H" || {
     echo "FATAL: TCTI is not enabled; the code buffer would be RWX" >&2; exit 1; }
-grep -q 'define CONFIG_AOK_GADGETS 1' "$CONFIG_H" || {
+grep -q 'define CONFIG_AOK_GADGETS' "$CONFIG_H" || {
     echo "FATAL: AOK gadgets are not enabled" >&2; exit 1; }
+# Belt and braces: the generated TCTI gadget translation units only exist when
+# the backend is TCTI.
+ls "$OUT"/*tcti*gadgets.c >/dev/null 2>&1 || {
+    echo "FATAL: no generated TCTI gadget sources in $OUT" >&2; exit 1; }
 if grep -q 'define CONFIG_TCG_HYBRID 1' "$CONFIG_H"; then
     echo "note: hybrid build; the app relies on the TCTI backend being chosen"
 fi
