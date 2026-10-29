@@ -135,8 +135,7 @@ banner "libslirp ${LIBSLIRP_VERSION}"
 fetch "libslirp-${LIBSLIRP_VERSION}" \
   "https://gitlab.freedesktop.org/slirp/libslirp/-/archive/v${LIBSLIRP_VERSION}/libslirp-v${LIBSLIRP_VERSION}.tar.gz" libslirp.tar.gz
 meson setup "${DEPS}/libslirp-build" "${DEPS}/libslirp-${LIBSLIRP_VERSION}" \
-    --cross-file "$CROSS" --prefix "$PREFIX" --buildtype release --default-library static \
-    -Dtests=false
+    --cross-file "$CROSS" --prefix "$PREFIX" --buildtype release --default-library static
 ninja -C "${DEPS}/libslirp-build" install
 
 banner "stamp"
