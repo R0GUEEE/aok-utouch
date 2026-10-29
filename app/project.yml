@@ -22,6 +22,7 @@ settings:
       - $(SRCROOT)/../build/qemu-ios
       - $(SRCROOT)/../build/ios-sysroot/include
       - $(SRCROOT)/../build/ios-sysroot/include/glib-2.0
+      - $(SRCROOT)/../build/ios-sysroot/include/pixman-1
       - $(SRCROOT)/../build/ios-sysroot/lib/glib-2.0/include
     LIBRARY_SEARCH_PATHS:
       - $(SRCROOT)/../build/qemu-ios
