@@ -156,44 +156,46 @@ else
         head -20 "$LIST" >&2
         exit 1; }
 
-    WORK="$OUT/link-objects"
-    rm -rf "$WORK"; mkdir -p "$WORK"
-    # Archives first: they are few, and their members may be referenced by name
-    # later. Objects are copied relative to the build dir.
+    # Do NOT flatten archives into bare objects. QEMU links several archives
+    # that each define the same symbol - weak stubs (stubs_iothread-lock.c)
+    # next to the real one, a 32-bit translate stub next to the 64-bit
+    # translator - and ld resolves that per archive, in link order. Flattening
+    # turns 221 of those resolutions into duplicate-symbol errors.
+    #
+    # `libtool -static -o merged.a a.a b.a c.a` keeps them as members, in
+    # order, which is what ld needs.
+    ARCHIVE_LIST="$OUT/link-archives.txt"
+    OBJECT_LIST="$OUT/link-objects.txt"
     while read -r input; do
         case "$input" in
             \#*) continue ;;
             *.a|*.fa)
-                EX="$WORK/.extract"
-                rm -rf "$EX"; mkdir -p "$EX"
-                ( cd "$EX" && ar x "$OUT/$input" 2>/dev/null ) || {
-                    echo "  warning: cannot extract $input" >&2; continue; }
-                find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
-                echo "  archive $input"
-                ;;
-            *.o)
-                cp "$OUT/$input" "$WORK/$(echo "$input" | tr '/' '_')"
-                ;;
+                case "$input" in
+                    "$PREFIX"/*) continue ;;   # third-party, linked separately
+                esac
+                echo "$OUT/$input" ;;
         esac
-    done < "$LIST"
-
-    # Belt and braces: every archive built under subprojects/ is target code
-    # (libslirp, libfdt). If the link line expressed one as -lname and the
-    # resolution above missed it, this still catches it.
+    done < "$LIST" | sort -u > "$ARCHIVE_LIST"
+    # Same sweep as before, for any subproject archive the link line named
+    # by -lname and the resolution above missed.
     for extra in $(find "$OUT/subprojects" -name '*.a' 2>/dev/null); do
-        EX="$WORK/.extract"
-        rm -rf "$EX"; mkdir -p "$EX"
-        ( cd "$EX" && ar x "$extra" 2>/dev/null ) || continue
-        find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
-        echo "  extra archive ${extra#"$OUT"/}"
+        echo "$extra" >> "$ARCHIVE_LIST"
     done
+    sort -u -o "$ARCHIVE_LIST" "$ARCHIVE_LIST"
 
-    TOTAL="$(find "$WORK" -maxdepth 1 -name '*.o' | wc -l | tr -d ' ')"
-    echo "collected $TOTAL objects"
-    [ "$TOTAL" -gt 500 ] || { echo "error: only $TOTAL objects collected" >&2; exit 1; }
+    # Objects on the link line that are not inside an archive (QEMU has none
+    # today, but be explicit rather than silently dropping them).
+    while read -r input; do
+        case "$input" in
+            \#*) continue ;;
+            *.o) echo "$OUT/$input" ;;
+        esac
+    done < "$LIST" > "$OBJECT_LIST" || true
 
-    ( cd "$WORK" && xcrun libtool -static -o "$LIB" ./*.o )
-    rm -rf "$WORK"
+    echo "archives: $(wc -l < "$ARCHIVE_LIST" | tr -d ' '), loose objects: $(wc -l < "$OBJECT_LIST" | tr -d ' ')"
+    sed 's|^|  |' "$ARCHIVE_LIST"
+
+    xcrun libtool -static -o "$LIB" $(cat "$ARCHIVE_LIST" "$OBJECT_LIST")
 fi
 ls -lh "$LIB"
 
