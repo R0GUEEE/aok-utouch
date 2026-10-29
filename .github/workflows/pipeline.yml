@@ -184,7 +184,6 @@ jobs:
           mkdir -p build
           tar -xzf build/prebuilt/ios-sysroot-*.tar.gz -C build
           bash scripts/09-restore-engine.sh "$(ls build/prebuilt/qemu-aarch64-ios-*.tar.gz | head -1)"
-          ls -lh build/qemu-ios/libqemu-system-aarch64.a build/qemu-headers/config-host.h
 
       - name: Build
         # No QEMU checkout, no glib build, no meson: only Swift, C and the .metal
