@@ -227,7 +227,6 @@ else
 
     xcrun libtool -static -o "$LIB" "$WORK"/*.o $(cat "$THIRD_PARTY")
     rm -rf "$WORK"
-    xcrun libtool -static -o "$LIB" $(cat "$ARCHIVE_LIST" "$OBJECT_LIST")
 fi
 ls -lh "$LIB"
 
