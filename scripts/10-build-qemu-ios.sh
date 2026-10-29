@@ -177,6 +177,17 @@ else
         esac
     done < "$LIST"
 
+    # Belt and braces: every archive built under subprojects/ is target code
+    # (libslirp, libfdt). If the link line expressed one as -lname and the
+    # resolution above missed it, this still catches it.
+    for extra in $(find "$OUT/subprojects" -name '*.a' 2>/dev/null); do
+        EX="$WORK/.extract"
+        rm -rf "$EX"; mkdir -p "$EX"
+        ( cd "$EX" && ar x "$extra" 2>/dev/null ) || continue
+        find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
+        echo "  extra archive ${extra#"$OUT"/}"
+    done
+
     TOTAL="$(find "$WORK" -maxdepth 1 -name '*.o' | wc -l | tr -d ' ')"
     echo "collected $TOTAL objects"
     [ "$TOTAL" -gt 500 ] || { echo "error: only $TOTAL objects collected" >&2; exit 1; }

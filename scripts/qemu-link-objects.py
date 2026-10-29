@@ -65,6 +65,27 @@ def main():
                  f"(is the build complete?)")
 
     tokens = expand(shlex.split(line), build_dir)
+
+    # Dependencies can arrive as `-L<dir> -l<name>` rather than as a path
+    # (libslirp does, which is how the first app link ended up without slirp).
+    libdirs, libnames = [], []
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token == "-L" and i + 1 < len(tokens):
+            libdirs.append(tokens[i + 1])
+            i += 2
+            continue
+        if token.startswith("-L") and len(token) > 2:
+            libdirs.append(token[2:])
+        elif token == "-l" and i + 1 < len(tokens):
+            libnames.append(tokens[i + 1])
+            i += 2
+            continue
+        elif token.startswith("-l") and len(token) > 2:
+            libnames.append(token[2:])
+        i += 1
+
     objects, archives = [], []
     for token in tokens:
         if token.startswith("-"):
@@ -73,6 +94,15 @@ def main():
             objects.append(token)
         elif token.endswith((".a", ".fa")):
             archives.append(token)
+
+    for name in libnames:
+        for libdir in libdirs:
+            for suffix in (".a", ".fa"):
+                candidate = os.path.join(libdir, f"lib{name}{suffix}")
+                if os.path.exists(candidate if os.path.isabs(candidate)
+                                  else os.path.join(build_dir, candidate)):
+                    archives.append(candidate)
+                    break
 
     if not objects and not archives:
         sys.exit("link command has no objects; refusing to build an empty library")
