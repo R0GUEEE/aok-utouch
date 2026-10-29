@@ -45,7 +45,10 @@ env:
 jobs:
   deps:
     name: deps (ios-sysroot)
-    runs-on: macos-15
+    # macos-15 resolves to the arm64 pool, which queues badly; the build is a
+    # cross compile either way, so the Intel image is just as correct and is
+    # consistently available. Override with vars.MACOS_RUNNER if you prefer.
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-15-intel' }}
     timeout-minutes: 60
     outputs:
       hash: ${{ steps.hash.outputs.hash }}
@@ -93,7 +96,7 @@ jobs:
   engine:
     name: engine (libqemu-system-aarch64.a)
     needs: deps
-    runs-on: macos-15
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-15-intel' }}
     timeout-minutes: 120
     outputs:
       hash: ${{ steps.hash.outputs.hash }}
@@ -160,7 +163,7 @@ jobs:
   app:
     name: app (unsigned .ipa)
     needs: [deps, engine]
-    runs-on: macos-15
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-15-intel' }}
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4

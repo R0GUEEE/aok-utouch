@@ -39,7 +39,8 @@ qemu_hash() {
         cat deps/manifest.env
         cat cross/aarch64-ios.txt.in
         # The flag set lives in this script, so hashing it hashes the flags.
-        cat scripts/04-cross-file.sh scripts/00-fetch.sh scripts/10-build-qemu-ios.sh
+        cat scripts/04-cross-file.sh scripts/00-fetch.sh \
+            scripts/10-build-qemu-ios.sh scripts/qemu-link-objects.py
     } | sha | cut -c1-16
 }
 
