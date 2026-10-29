@@ -137,8 +137,10 @@ echo "TCTI + AOK gadgets: OK"
 
 banner "static library"
 LIB="$OUT/libqemu-system-aarch64.a"
-echo "archives in $OUT:"
-ls -1 "$OUT"/*.a "$OUT"/*.fa 2>/dev/null | sed 's/^/  /' || echo "  (none)"
+# QEMU mirrors the source tree: hw/core/libhwcore.a, target/arm/..., plus the
+# subprojects' own archives. Every one of them is part of the emulator.
+ARCHIVES="$(find "$OUT" \( -name '*.a' -o -name '*.fa' \) -not -path '*/pyvenv/*' | sort)"
+echo "archives found: $(printf '%s\n' "$ARCHIVES" | wc -l | tr -d ' ')"
 
 if [ -f "$LIB" ]; then
     echo "reusing $LIB"
@@ -151,7 +153,7 @@ else
     WORK="$OUT/all-objects"
     rm -rf "$WORK"; mkdir -p "$WORK"
     MERGED=0
-    for archive in $(find "$OUT" -maxdepth 1 \( -name '*.a' -o -name '*.fa' \) | sort); do
+    for archive in $ARCHIVES; do
         EX="$WORK/.extract"
         rm -rf "$EX"; mkdir -p "$EX"
         ( cd "$EX" && ar x "$archive" 2>/dev/null ) || continue
@@ -160,7 +162,7 @@ else
         # mv -n: first copy wins, so an object built for two archives is only
         # in the merged library once.
         find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
-        echo "  $(basename "$archive"): $n objects"
+        echo "  ${archive#"$OUT"/}: $n objects"
         MERGED=$((MERGED + n))
     done
 
@@ -169,7 +171,7 @@ else
     [ "$TOTAL" -gt 500 ] || {
         echo "error: only $TOTAL unique objects; the link would be missing code" >&2
         echo "archives seen:" >&2
-        ls -1 "$OUT"/*.a "$OUT"/*.fa 2>/dev/null >&2
+        printf '%s\n' "$ARCHIVES" >&2
         exit 1; }
 
     # libtool is Apple's archiver: the result is an archive ld64 links happily.
@@ -181,12 +183,18 @@ ls -lh "$LIB"
 banner "firmware blobs"
 mkdir -p "$BUILD/firmware"
 for blob in edk2-aarch64-code.fd edk2-arm-vars.fd; do
-    if [ -f "$OUT/pc-bios/$blob" ]; then
-        cp "$OUT/pc-bios/$blob" "$BUILD/firmware/"
-    elif [ -f "$OUT/pc-bios/$blob.bz2" ]; then
-        bunzip2 -kc "$OUT/pc-bios/$blob.bz2" > "$BUILD/firmware/$blob"
-    fi
+    for dir in "$OUT/pc-bios" "$SRC/pc-bios"; do
+        if [ -f "$dir/$blob" ]; then
+            cp "$dir/$blob" "$BUILD/firmware/$blob"; break
+        elif [ -f "$dir/$blob.bz2" ]; then
+            bunzip2 -kc "$dir/$blob.bz2" > "$BUILD/firmware/$blob"; break
+        fi
+    done
 done
+[ -s "$BUILD/firmware/edk2-aarch64-code.fd" ] || {
+    echo "error: edk2 aarch64 firmware not found in build or source pc-bios" >&2
+    ls -1 "$SRC/pc-bios" | grep -i edk2 >&2 || true
+    exit 1; }
 ls -lh "$BUILD/firmware" || echo "warning: edk2 blobs not found in pc-bios"
 
 banner "stage headers for the app"
