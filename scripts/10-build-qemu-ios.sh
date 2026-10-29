@@ -137,43 +137,44 @@ echo "TCTI + AOK gadgets: OK"
 
 banner "static library"
 LIB="$OUT/libqemu-system-aarch64.a"
+echo "archives in $OUT:"
+ls -1 "$OUT"/*.a "$OUT"/*.fa 2>/dev/null | sed 's/^/  /' || echo "  (none)"
+
 if [ -f "$LIB" ]; then
     echo "reusing $LIB"
 else
-    # QEMU 11 no longer emits libqemu-system-aarch64.fa for a plain system
-    # build; the objects the link used are in the target's Meson private dir.
-    FA="$(find "$OUT" -maxdepth 2 -name 'libqemu-system-aarch64*.fa' | head -1)"
-    if [ -n "$FA" ]; then
-        WORK="$OUT/fa-objects"
-        rm -rf "$WORK"; mkdir -p "$WORK"
-        ( cd "$WORK" && ar x "$FA" )
-        OBJDIR="$WORK"
-        echo "using $(basename "$FA")"
-    else
-        # Two .p dirs exist for this target: the "-unsigned" link step and the
-        # fat-archive one, which holds the ~2000 real objects. Take whichever
-        # has the most objects instead of trusting the first one find returns.
-        OBJDIR=""
-        BEST=0
-        for candidate in $(find "$OUT" -maxdepth 1 -type d -name 'qemu-system-aarch64*.p'); do
-            count="$(find "$candidate" -name '*.o' | wc -l | tr -d ' ')"
-            echo "  candidate $(basename "$candidate"): $count objects"
-            if [ "$count" -gt "$BEST" ]; then
-                BEST="$count"
-                OBJDIR="$candidate"
-            fi
-        done
-        [ -n "$OBJDIR" ] || { echo "no QEMU object directory in $OUT" >&2; exit 1; }
-        echo "using objects from $(basename "$OBJDIR")"
-    fi
+    # QEMU 11 splits the emulator over several static archives (libqemuutil,
+    # one per target, one per device class) and links them whole into the
+    # executable. There is no single .fa to borrow, so merge every archive the
+    # build produced into one, deduplicating objects that appear in more than
+    # one (the same source, built twice into different archives).
+    WORK="$OUT/all-objects"
+    rm -rf "$WORK"; mkdir -p "$WORK"
+    MERGED=0
+    for archive in $(find "$OUT" -maxdepth 1 \( -name '*.a' -o -name '*.fa' \) | sort); do
+        EX="$WORK/.extract"
+        rm -rf "$EX"; mkdir -p "$EX"
+        ( cd "$EX" && ar x "$archive" 2>/dev/null ) || continue
+        n="$(find "$EX" -name '*.o' | wc -l | tr -d ' ')"
+        [ "$n" -gt 0 ] || continue
+        # mv -n: first copy wins, so an object built for two archives is only
+        # in the merged library once.
+        find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
+        echo "  $(basename "$archive"): $n objects"
+        MERGED=$((MERGED + n))
+    done
 
-    OBJS="$(find "$OBJDIR" -name '*.o' | sort)"
-    OBJ_COUNT="$(printf '%s\n' "$OBJS" | wc -l | tr -d ' ')"
-    echo "$OBJ_COUNT objects"
-    [ "$OBJ_COUNT" -gt 100 ] || { echo "suspiciously few objects; refusing" >&2; exit 1; }
-    # libtool is Apple's archiver: ld64 reads its output happily.
-    xcrun libtool -static -o "$LIB" $OBJS
-    rm -rf "$OBJDIR"
+    TOTAL="$(find "$WORK" -maxdepth 1 -name '*.o' | wc -l | tr -d ' ')"
+    echo "merged $MERGED objects ($TOTAL unique)"
+    [ "$TOTAL" -gt 500 ] || {
+        echo "error: only $TOTAL unique objects; the link would be missing code" >&2
+        echo "archives seen:" >&2
+        ls -1 "$OUT"/*.a "$OUT"/*.fa 2>/dev/null >&2
+        exit 1; }
+
+    # libtool is Apple's archiver: the result is an archive ld64 links happily.
+    ( cd "$WORK" && xcrun libtool -static -o "$LIB" ./*.o )
+    rm -rf "$WORK"
 fi
 ls -lh "$LIB"
 
