@@ -57,6 +57,7 @@ targets:
           - -lgio-2.0
           - -lgmodule-2.0
           - -lpixman-1
+          - -lslirp
           - -liconv
           - -lz
           - -lc++

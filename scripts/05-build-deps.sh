@@ -126,6 +126,19 @@ meson setup "${DEPS}/glib-build" "${DEPS}/glib-${GLIB_VERSION}" \
     -Dman-pages=disabled -Ddocumentation=false -Dbsymbolic_functions=false
 ninja -C "${DEPS}/glib-build" install
 
+banner "libslirp ${LIBSLIRP_VERSION}"
+# QEMU's --enable-slirp resolves the dependency with pkg-config and falls back
+# to a meson subproject. On a cross build that fallback produces a *shared*
+# library for the target, which a statically linked app cannot use - the link
+# failed on slirp_new. Build it here instead, static, into the same sysroot, so
+# QEMU's pkg-config probe finds it and the app can link it.
+fetch "libslirp-${LIBSLIRP_VERSION}" \
+  "https://gitlab.freedesktop.org/slirp/libslirp/-/archive/v${LIBSLIRP_VERSION}/libslirp-v${LIBSLIRP_VERSION}.tar.gz" libslirp.tar.gz
+meson setup "${DEPS}/libslirp-build" "${DEPS}/libslirp-${LIBSLIRP_VERSION}" \
+    --cross-file "$CROSS" --prefix "$PREFIX" --buildtype release --default-library static \
+    -Dtests=false
+ninja -C "${DEPS}/libslirp-build" install
+
 banner "stamp"
 date -u +%Y-%m-%dT%H:%M:%SZ > "$STAMP"
 echo "$HASH" >> "$STAMP"
