@@ -156,45 +156,66 @@ else
         head -20 "$LIST" >&2
         exit 1; }
 
-    # Do NOT flatten archives into bare objects. QEMU links several archives
-    # that each define the same symbol - weak stubs (stubs_iothread-lock.c)
-    # next to the real one, a 32-bit translate stub next to the 64-bit
-    # translator - and ld resolves that per archive, in link order. Flattening
-    # turns 221 of those resolutions into duplicate-symbol errors.
+    # How QEMU links this itself (meson.build, the `execs` loop):
+    #   exe_objs = lib.extract_all_objects(recursive: true)
+    # i.e. every object of the emulator's libraries is linked *directly*, and
+    # ld then resolves duplicate definitions by first-definition-wins across
+    # the whole set. libqemuutil.a and subproject archives come in as
+    # dependencies instead.
     #
-    # `libtool -static -o merged.a a.a b.a c.a` keeps them as members, in
-    # order, which is what ld needs.
-    ARCHIVE_LIST="$OUT/link-archives.txt"
-    OBJECT_LIST="$OUT/link-objects.txt"
+    # A single archive cannot express that: ld only pulls a member when a
+    # symbol is undefined, so weak stubs (stubs_iothread-lock.c) and 64-bit
+    # translators (translate-a64.c) would never be reached. Flatten the QEMU
+    # libraries, keep first definition of each symbol, and carry the
+    # third-party archives (libqemuutil, dtc, subprojects) as members.
+    QEMU_ARCHIVES="$OUT/link-archives.txt"
+    THIRD_PARTY="$OUT/link-archives-thirdparty.txt"
+    : > "$QEMU_ARCHIVES"; : > "$THIRD_PARTY"
+
     while read -r input; do
         case "$input" in
             \#*) continue ;;
             *.a|*.fa)
                 case "$input" in
-                    "$PREFIX"/*) continue ;;   # third-party, linked separately
+                    "$PREFIX"/*) continue ;;      # sysroot: the app links these
                 esac
-                echo "$OUT/$input" ;;
+                name="$(basename "$input")"
+                case "$name" in
+                    libqemuutil*|libfdt*|*slirp*) echo "$OUT/$input" >> "$THIRD_PARTY" ;;
+                    *)                            echo "$OUT/$input" >> "$QEMU_ARCHIVES" ;;
+                esac
+                ;;
         esac
-    done < "$LIST" | sort -u > "$ARCHIVE_LIST"
-    # Same sweep as before, for any subproject archive the link line named
-    # by -lname and the resolution above missed.
+    done < "$LIST"
+
     for extra in $(find "$OUT/subprojects" -name '*.a' 2>/dev/null); do
-        echo "$extra" >> "$ARCHIVE_LIST"
+        echo "$extra" >> "$THIRD_PARTY"
     done
-    sort -u -o "$ARCHIVE_LIST" "$ARCHIVE_LIST"
+    sort -u -o "$QEMU_ARCHIVES" "$QEMU_ARCHIVES"
+    sort -u -o "$THIRD_PARTY" "$THIRD_PARTY"
 
-    # Objects on the link line that are not inside an archive (QEMU has none
-    # today, but be explicit rather than silently dropping them).
-    while read -r input; do
-        case "$input" in
-            \#*) continue ;;
-            *.o) echo "$OUT/$input" ;;
-        esac
-    done < "$LIST" > "$OBJECT_LIST" || true
+    echo "QEMU archives ($(wc -l < "$QEMU_ARCHIVES" | tr -d ' ')), flattened:"
+    sed 's|^|  |' "$QEMU_ARCHIVES"
+    echo "third-party archives kept whole:"
+    sed 's|^|  |' "$THIRD_PARTY"
 
-    echo "archives: $(wc -l < "$ARCHIVE_LIST" | tr -d ' '), loose objects: $(wc -l < "$OBJECT_LIST" | tr -d ' ')"
-    sed 's|^|  |' "$ARCHIVE_LIST"
+    WORK="$OUT/flatten"
+    rm -rf "$WORK"; mkdir -p "$WORK"
+    while read -r archive; do
+        EX="$WORK/.x"
+        rm -rf "$EX"; mkdir -p "$EX"
+        ( cd "$EX" && ar x "$archive" 2>/dev/null ) || continue
+        # First definition of a member name wins; QEMU's link order is the
+        # order meson listed the libraries in, which is what we read.
+        find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
+    done < "$QEMU_ARCHIVES"
 
+    TOTAL="$(find "$WORK" -maxdepth 1 -name '*.o' | wc -l | tr -d ' ')"
+    echo "flattened $TOTAL objects"
+    [ "$TOTAL" -gt 700 ] || { echo "error: only $TOTAL objects flattened" >&2; exit 1; }
+
+    xcrun libtool -static -o "$LIB" "$WORK"/*.o $(cat "$THIRD_PARTY")
+    rm -rf "$WORK"
     xcrun libtool -static -o "$LIB" $(cat "$ARCHIVE_LIST" "$OBJECT_LIST")
 fi
 ls -lh "$LIB"
