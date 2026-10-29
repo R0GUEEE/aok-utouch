@@ -86,7 +86,10 @@ banner "configure"
 mkdir -p "$OUT"
 mkdir -p "$BUILD/configure-logs"
 if [ ! -f "$OUT/config-host.mak" ]; then
-    "$SRC/configure" \
+    # configure must run *inside* the build dir: meson refuses a build dir that
+    # is a parent of the source tree, which is what happens if you invoke
+    # src/qemu/configure from the repo root.
+    ( cd "$OUT" && "$SRC/configure" \
         --cross-prefix= \
         --cpu=aarch64 \
         --target-list=aarch64-softmmu \
@@ -104,7 +107,7 @@ if [ ! -f "$OUT/config-host.mak" ]; then
         --disable-capstone --disable-fuse --disable-fuse-lseek \
         --disable-virtfs --disable-qed \
         --prefix="$OUT/install" \
-        2>&1 | tee "$BUILD/configure-logs/qemu-ios.log"
+        2>&1 | tee "$BUILD/configure-logs/qemu-ios.log" )
 else
     echo "reusing existing configuration in $OUT"
 fi
