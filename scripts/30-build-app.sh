@@ -12,7 +12,8 @@ LIB="${BUILD}/qemu-ios/libqemu-system-aarch64.a"
 banner() { printf '\n== %s\n' "$*"; }
 die() { echo "error: $*" >&2; exit 1; }
 
-[ -f "$LIB" ] || die "missing $LIB — run scripts/10-build-qemu-ios.sh, or restore a
+LIST="${BUILD}/qemu-ios/engine-link-inputs.txt"
+[ -s "$LIST" ] || die "missing $LIST — run scripts/10-build-qemu-ios.sh, or restore a
        prebuilt engine with scripts/09-restore-engine.sh <url>"
 command -v xcodebuild >/dev/null || die "xcodebuild missing (macOS + Xcode)"
 command -v xcodegen >/dev/null || die "xcodegen missing (brew install xcodegen)"
@@ -49,6 +50,8 @@ banner "verify the binary"
 # qemu_init must be inside, and the engine's own main() must not be: the app's
 # entry point is @main in Swift.
 nm -gU "$APP_BUNDLE/AokVM" | grep -q ' _qemu_init$' || die "qemu_init not linked in"
+nm -gU "$APP_BUNDLE/AokVM" | grep -q ' _qemu_main_loop$' || die "qemu_main_loop not linked in"
+nm -gU "$APP_BUNDLE/AokVM" | grep -q ' _aok_tb_exec\| _aok_tb_exec' || echo "note: no aok_tb_exec symbol (AOK entry may be inlined)"
 if nm -gU "$APP_BUNDLE/AokVM" | grep -q ' _qemu_system_main$'; then
     echo "note: qemu_system_main is linked but never called (expected)"
 fi

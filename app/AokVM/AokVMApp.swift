@@ -4,7 +4,14 @@ import UIKit
 @main
 @MainActor
 struct AokVMApp: App {
-    @StateObject private var runtime = VMRuntime()
+    @StateObject private var runtime: VMRuntime
+
+    init() {
+        // VMRuntime is main-actor isolated, so it is constructed here rather
+        // than in a property initializer (which is nonisolated).
+        _runtime = StateObject(wrappedValue: VMRuntime())
+    }
+
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

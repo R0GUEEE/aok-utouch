@@ -47,10 +47,15 @@ targets:
         # QEMU's own headers and our glue are C99/C11 with GNU extensions.
         OTHER_CFLAGS: -Wno-everything -D_GNU_SOURCE -DHAVE_CONFIG_H
         OTHER_LDFLAGS:
-          # force_load, not -l: QEMU registers devices, machines and TCG backends
-          # from per-object constructors. Without force_load the linker drops
-          # every object nothing calls directly and the machine type vanishes.
-          - -Wl,-force_load,$(SRCROOT)/../build/qemu-ios/libqemu-system-aarch64.a
+          # The engine is a *flat* object list, not an archive, and it has to
+          # stay flat: QEMU links stubs and real implementations together and
+          # lets ld pick the first definition (system_cpus.c includes
+          # stubs/iothread-lock.c for that reason). An archive would hand those
+          # duplicates to ld's duplicate check, which rejects them.
+          #
+          # scripts/10-build-qemu-ios.sh writes the list; the objects must be
+          # passed directly, so it is a response file, not -l or force_load.
+          - -Wl,@$(SRCROOT)/../build/qemu-ios/engine-link-inputs.txt
           - -lglib-2.0
           - -lgthread-2.0
           - -lgobject-2.0

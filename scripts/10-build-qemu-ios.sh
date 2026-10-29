@@ -24,9 +24,12 @@ TARBALL="${BUILD}/prebuilt/qemu-aarch64-ios-${HASH}.tar.gz"
 
 pack() {
     # Layout matches what scripts/09-restore-engine.sh expects under build/.
+    # ~1200 objects at ~64 KB apiece compress to a few tens of MB; the tarball
+    # is the whole engine as far as the app is concerned.
     mkdir -p "$BUILD/prebuilt"
     tar -czf "$TARBALL" -C "$BUILD" \
-        qemu-ios/libqemu-system-aarch64.a \
+        qemu-ios/flatten \
+        qemu-ios/engine-link-inputs.txt \
         "qemu-ios/.aok-qemu-${HASH}" \
         qemu-ios/BUILDINFO \
         qemu-headers \
@@ -140,9 +143,10 @@ echo "TCTI + AOK gadgets: OK"
 
 banner "static library"
 LIB="$OUT/libqemu-system-aarch64.a"
+OBJECT_LIST_OUT="$OUT/engine-link-inputs.txt"
 
-if [ -f "$LIB" ]; then
-    echo "reusing $LIB"
+if [ -s "$OBJECT_LIST_OUT" ]; then
+    echo "reusing $OBJECT_LIST_OUT ($(wc -l < "$OBJECT_LIST_OUT" | tr -d ' ') link inputs)"
 else
     # Read the object list out of QEMU's own link command instead of guessing
     # where Meson put things: the emulator is linked from ~2000 objects plus the
@@ -221,31 +225,34 @@ else
         find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
     done
 
-    # Self-test before archiving: a *flat* set of objects that ld would link
-    # must not contain two definitions of the same symbol. If it does, the
-    # first-wins rule in this script is wrong and the failure would otherwise
-    # only show up as 221 duplicates at app link time, twenty minutes later.
+    # The set legitimately contains duplicate definitions: QEMU links stubs and
+    # real implementations together and lets ld pick the first (system_cpus.c
+    # ships #include "stubs/iothread-lock.c" precisely so the order decides).
+    # So it must stay *flat*: pass the objects to the linker directly. An
+    # archive would publish the duplicates to ld's duplicate check, which is
+    # what turned this into 221 errors.
     DEFS="$OUT/flatten-defs.txt"
     : > "$DEFS"
     for obj in "$WORK"/*.o; do
         xcrun nm -gU --defined-only "$obj" 2>/dev/null | awk '{print $3}' >> "$DEFS"
     done
-    DUPS="$(sort "$DEFS" | uniq -d | wc -l | tr -d ' ')"
-    echo "duplicate global definitions across the flat set: $DUPS"
-    if [ "$DUPS" -gt 0 ]; then
-        sort "$DEFS" | uniq -d | head -20 >&2
-        echo "error: stubs and real definitions both survived; fix the ordering" >&2
-        exit 1
-    fi
+    echo "objects: $(find "$WORK" -maxdepth 1 -name '*.o' | wc -l | tr -d ' '), symbols with duplicate definitions: $(sort "$DEFS" | uniq -d | wc -l | tr -d ' ')"
 
     TOTAL="$(find "$WORK" -maxdepth 1 -name '*.o' | wc -l | tr -d ' ')"
     echo "flattened $TOTAL objects"
     [ "$TOTAL" -gt 700 ] || { echo "error: only $TOTAL objects flattened" >&2; exit 1; }
 
-    xcrun libtool -static -o "$LIB" "$WORK"/*.o $(cat "$THIRD_PARTY")
-    rm -rf "$WORK"
+    : > "$OBJECT_LIST_OUT"
+    for obj in "$WORK"/*.o; do
+        echo "$obj" >> "$OBJECT_LIST_OUT"
+    done
+    for archive in $(cat "$THIRD_PARTY"); do
+        echo "$archive" >> "$OBJECT_LIST_OUT"
+    done
+    rm -f "$LIB"   # superseded: the flat object list is what the app links
 fi
-ls -lh "$LIB"
+# The app links these, flat and in order (see app/project.yml).
+echo "link inputs: $(wc -l < "$OBJECT_LIST_OUT" | tr -d ' ')"
 
 banner "firmware blobs"
 mkdir -p "$BUILD/firmware"

@@ -27,7 +27,14 @@ echo "$(du -h "$TARBALL" | cut -f1) from $SRC"
 
 banner "extract"
 tar -xzf "$TARBALL" -C "${ROOT}/build"
-ls -lh "${ROOT}/build/qemu-ios/libqemu-system-aarch64.a"
+COUNT_WANT="$(wc -l < "${ROOT}/build/qemu-ios/engine-link-inputs.txt" 2>/dev/null | tr -d ' ')"
+COUNT_HAVE="$(find "${ROOT}/build/qemu-ios/flatten" -name '*.o' 2>/dev/null | wc -l | tr -d ' ')"
+echo "link inputs listed: ${COUNT_WANT:-none}, objects present: ${COUNT_HAVE:-0}"
+[ "${COUNT_HAVE:-0}" -gt 700 ] || {
+    echo "error: tarball has no flat engine objects" >&2; exit 1; }
+for archive in $(grep '\.a$' "${ROOT}/build/qemu-ios/engine-link-inputs.txt" 2>/dev/null); do
+    [ -f "$archive" ] || echo "warning: missing archive $archive" >&2
+done
 [ -d "${ROOT}/build/qemu-headers/include" ] || {
     echo "error: tarball has no qemu-headers/include" >&2; exit 1; }
 
