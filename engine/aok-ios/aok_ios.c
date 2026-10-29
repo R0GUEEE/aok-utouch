@@ -263,7 +263,12 @@ int aok_ios_start(const char *const *args, int count)
         __atomic_store_n(&S.thread_valid, 0, __ATOMIC_RELEASE);
         return -2;
     }
+#if defined(__linux__)
     pthread_setname_np(S.thread, "aok-engine");
+#else
+    /* Darwin's pthread_setname_np names the *current* thread only. */
+    pthread_setname_np("aok-engine");
+#endif
     return 0;
 }
 
