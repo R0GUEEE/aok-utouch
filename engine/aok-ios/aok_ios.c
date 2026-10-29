@@ -20,7 +20,6 @@
 #endif
 
 #include "qapi/error.h"
-#include "qapi/run-state.h"
 #include "qemu/main-loop.h"
 #include "system/runstate.h"
 #include "system/system.h"
