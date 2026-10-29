@@ -16,8 +16,8 @@ JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 banner() { printf '\n== %s\n' "$*"; }
 
 [ -d "$SRC" ] || { echo "run scripts/00-fetch.sh first" >&2; exit 1; }
-# The sysroot is restored from a prebuilt tarball in CI, so the cross file has
-# to be regenerable without running the dependency build.
+# Kept for inspection and hashed as a build input; configure writes its own
+# machine file, so this is not passed to it.
 CROSS="$(bash "${ROOT}/scripts/04-cross-file.sh")"
 [ -d "$PREFIX" ] && [ -n "$(ls -A "$PREFIX")" ] || {
     echo "no sysroot at $PREFIX — run scripts/05-build-deps.sh or restore a prebuilt one" >&2
@@ -50,6 +50,28 @@ if [ -f "$OUT/libqemu-system-aarch64.a" ] && [ -f "$STAMP" ] && [ "${FORCE:-0}" 
     exit 0
 fi
 
+banner "toolchain"
+# QEMU's configure has no --cross-file: it writes its own config-meson.cross
+# from the compilers it finds. This fork detects the iOS device target from
+# TargetConditionals.h and adds needs_exe_wrapper=true itself, which is exactly
+# what a cross build from an Intel Mac needs.
+SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
+TARGET_FLAGS="-arch arm64 -isysroot ${SDKROOT} -miphoneos-version-min=${MIN}"
+export CC="${CC:-xcrun --sdk iphoneos clang}"
+export CXX="${CXX:-xcrun --sdk iphoneos clang++}"
+export OBJCC="${OBJCC:-xcrun --sdk iphoneos clang}"
+export CFLAGS="${CFLAGS:-} ${TARGET_FLAGS} -O3"
+export CXXFLAGS="${CXXFLAGS:-} ${TARGET_FLAGS} -O3"
+export OBJCFLAGS="${OBJCFLAGS:-} ${TARGET_FLAGS} -O3"
+export LDFLAGS="${LDFLAGS:-} ${TARGET_FLAGS}"
+export AR="xcrun --sdk iphoneos ar"
+export RANLIB="xcrun --sdk iphoneos ranlib"
+export STRIP="xcrun --sdk iphoneos strip"
+export NM="xcrun --sdk iphoneos nm"
+export OBJCOPY="xcrun --sdk iphoneos objcopy"
+echo "CC=$CC"
+echo "SDK=$SDKROOT"
+
 banner "configure"
 # A note on the two interesting flags:
 #   --enable-tcg-threaded-interpreter  makes the TCG code buffer data, not code
@@ -61,7 +83,8 @@ mkdir -p "$OUT"
 mkdir -p "$BUILD/configure-logs"
 if [ ! -f "$OUT/config-host.mak" ]; then
     "$SRC/configure" \
-        --cross-file="$CROSS" \
+        --cross-prefix= \
+        --cpu=aarch64 \
         --target-list=aarch64-softmmu \
         --enable-aok-gadgets \
         --enable-tcg-threaded-interpreter \

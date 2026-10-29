@@ -172,13 +172,30 @@ for pkg in "${UT_PKGS[@]}"; do
         echo "  ! $pkg not in the index for ${UT_SUITE}/${ARCH}"
     fi
 done
-chroot "$MNT" apt-get install -y -qq --no-install-recommends "${UT_PKGS[@]}" || \
-    echo "warning: some UT packages failed to install; see /var/log/apt in the image"
+if ! chroot "$MNT" apt-get install -y --no-install-recommends "${UT_PKGS[@]}" \
+        2>&1 | tee "$WORK/ut-apt.log"; then
+    # A batch install tells you "held broken packages" and nothing else. Retry
+    # per package so the log names the culprit, then carry on: a bootable image
+    # with three missing UI packages is worth more than no image.
+    echo "warning: batch install failed, retrying individually" >&2
+    for pkg in "${UT_PKGS[@]}"; do
+        chroot "$MNT" apt-get install -y --no-install-recommends "$pkg" \
+            >"$WORK/ut-$pkg.log" 2>&1 || echo "  ! $pkg failed ($WORK/ut-$pkg.log)"
+    done
+fi
 
 banner "user and session"
-chroot "$MNT" useradd -m -s /bin/bash -G sudo,video,render,input,audio,plugdev,netdev,bluetooth \
+# Groups a minimal root does not have; useradd fails outright on a missing one.
+for g in sudo video render input audio plugdev netdev bluetooth; do
+    chroot "$MNT" getent group "$g" >/dev/null 2>&1 || chroot "$MNT" groupadd -r "$g"
+done
+chroot "$MNT" useradd -m -s /bin/bash \
+    -G sudo,video,render,input,audio,plugdev,netdev,bluetooth \
     -c "Ubuntu Touch" phablet || true
-echo 'phablet:phablet' | chroot "$MNT" chpasswd
+# chpasswd goes through PAM, which is not fully configured in a chroot this
+# young; write the hash straight into /etc/shadow instead.
+PHABLET_HASH="$(openssl passwd -6 phablet)"
+chroot "$MNT" usermod -p "$PHABLET_HASH" phablet
 echo 'phablet ALL=(ALL) NOPASSWD:ALL' > "$MNT/etc/sudoers.d/90-phablet"
 chmod 440 "$MNT/etc/sudoers.d/90-phablet"
 
