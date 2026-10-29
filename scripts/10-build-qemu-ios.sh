@@ -15,16 +15,6 @@ JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 
 banner() { printf '\n== %s\n' "$*"; }
 
-[ -d "$SRC" ] || { echo "run scripts/00-fetch.sh first" >&2; exit 1; }
-# Kept for inspection and hashed as a build input; configure writes its own
-# machine file, so this is not passed to it.
-CROSS="$(bash "${ROOT}/scripts/04-cross-file.sh")"
-[ -d "$PREFIX" ] && [ -n "$(ls -A "$PREFIX")" ] || {
-    echo "no sysroot at $PREFIX — run scripts/05-build-deps.sh or restore a prebuilt one" >&2
-    exit 1; }
-command -v meson >/dev/null || { echo "meson missing: pip3 install meson" >&2; exit 1; }
-command -v ninja >/dev/null || { echo "ninja missing: brew install ninja" >&2; exit 1; }
-
 export PKG_CONFIG_LIBDIR="${PREFIX}/lib/pkgconfig"
 export PKG_CONFIG_PATH=""
 
@@ -44,11 +34,24 @@ pack() {
     ls -lh "$TARBALL"
 }
 
+# The cache path must not need a QEMU checkout: CI restores the library and the
+# staged headers from a cache or an artifact and never clones the source.
 if [ -f "$OUT/libqemu-system-aarch64.a" ] && [ -f "$STAMP" ] && [ "${FORCE:-0}" != 1 ]; then
     banner "engine ${HASH} already built"
     [ "${PACK:-0}" = "1" ] && pack
     exit 0
 fi
+
+banner "preconditions"
+[ -d "$SRC" ] || { echo "run scripts/00-fetch.sh first" >&2; exit 1; }
+# Kept for inspection and hashed as a build input; configure writes its own
+# machine file, so this is not passed to it.
+CROSS="$(bash "${ROOT}/scripts/04-cross-file.sh")"
+[ -d "$PREFIX" ] && [ -n "$(ls -A "$PREFIX")" ] || {
+    echo "no sysroot at $PREFIX — run scripts/05-build-deps.sh or restore a prebuilt one" >&2
+    exit 1; }
+command -v meson >/dev/null || { echo "meson missing: pip3 install meson" >&2; exit 1; }
+command -v ninja >/dev/null || { echo "ninja missing: brew install ninja" >&2; exit 1; }
 
 banner "toolchain"
 # QEMU's configure has no --cross-file: it writes its own config-meson.cross
