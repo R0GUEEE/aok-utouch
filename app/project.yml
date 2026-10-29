@@ -16,6 +16,7 @@ settings:
     GCC_C_LANGUAGE_STANDARD: gnu11
     OTHER_LDFLAGS: -lc++ -lz
     HEADER_SEARCH_PATHS:
+      - $(SRCROOT)/../engine/aok-ios
       - $(SRCROOT)/../build/qemu-headers/include
       - $(SRCROOT)/../build/qemu-headers
       - $(SRCROOT)/../build/qemu-ios
