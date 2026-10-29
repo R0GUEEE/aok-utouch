@@ -140,44 +140,47 @@ echo "TCTI + AOK gadgets: OK"
 
 banner "static library"
 LIB="$OUT/libqemu-system-aarch64.a"
-# QEMU mirrors the source tree: hw/core/libhwcore.a, target/arm/..., plus the
-# subprojects' own archives. Every one of them is part of the emulator.
-ARCHIVES="$(find "$OUT" \( -name '*.a' -o -name '*.fa' \) -not -path '*/pyvenv/*' | sort)"
-echo "archives found: $(printf '%s\n' "$ARCHIVES" | wc -l | tr -d ' ')"
 
 if [ -f "$LIB" ]; then
     echo "reusing $LIB"
 else
-    # QEMU 11 splits the emulator over several static archives (libqemuutil,
-    # one per target, one per device class) and links them whole into the
-    # executable. There is no single .fa to borrow, so merge every archive the
-    # build produced into one, deduplicating objects that appear in more than
-    # one (the same source, built twice into different archives).
-    WORK="$OUT/all-objects"
-    rm -rf "$WORK"; mkdir -p "$WORK"
-    MERGED=0
-    for archive in $ARCHIVES; do
-        EX="$WORK/.extract"
-        rm -rf "$EX"; mkdir -p "$EX"
-        ( cd "$EX" && ar x "$archive" 2>/dev/null ) || continue
-        n="$(find "$EX" -name '*.o' | wc -l | tr -d ' ')"
-        [ "$n" -gt 0 ] || continue
-        # mv -n: first copy wins, so an object built for two archives is only
-        # in the merged library once.
-        find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
-        echo "  ${archive#"$OUT"/}: $n objects"
-        MERGED=$((MERGED + n))
-    done
-
-    TOTAL="$(find "$WORK" -maxdepth 1 -name '*.o' | wc -l | tr -d ' ')"
-    echo "merged $MERGED objects ($TOTAL unique)"
-    [ "$TOTAL" -gt 500 ] || {
-        echo "error: only $TOTAL unique objects; the link would be missing code" >&2
-        echo "archives seen:" >&2
-        printf '%s\n' "$ARCHIVES" >&2
+    # Read the object list out of QEMU's own link command instead of guessing
+    # where Meson put things: the emulator is linked from ~2000 objects plus the
+    # subproject archives, and no single .fa is left behind afterwards.
+    LIST="$OUT/link-inputs.txt"
+    python3 "${ROOT}/scripts/qemu-link-objects.py" "$OUT" > "$LIST" || exit 1
+    OBJ_COUNT="$(grep -c '\.o$' "$LIST" || true)"
+    echo "$OBJ_COUNT objects on the link line"
+    [ "${OBJ_COUNT:-0}" -gt 500 ] || {
+        echo "error: only ${OBJ_COUNT:-0} objects; the link line was not parsed" >&2
+        head -20 "$LIST" >&2
         exit 1; }
 
-    # libtool is Apple's archiver: the result is an archive ld64 links happily.
+    WORK="$OUT/link-objects"
+    rm -rf "$WORK"; mkdir -p "$WORK"
+    # Archives first: they are few, and their members may be referenced by name
+    # later. Objects are copied relative to the build dir.
+    while read -r input; do
+        case "$input" in
+            \#*) continue ;;
+            *.a|*.fa)
+                EX="$WORK/.extract"
+                rm -rf "$EX"; mkdir -p "$EX"
+                ( cd "$EX" && ar x "$OUT/$input" 2>/dev/null ) || {
+                    echo "  warning: cannot extract $input" >&2; continue; }
+                find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
+                echo "  archive $input"
+                ;;
+            *.o)
+                cp "$OUT/$input" "$WORK/$(echo "$input" | tr '/' '_')"
+                ;;
+        esac
+    done < "$LIST"
+
+    TOTAL="$(find "$WORK" -maxdepth 1 -name '*.o' | wc -l | tr -d ' ')"
+    echo "collected $TOTAL objects"
+    [ "$TOTAL" -gt 500 ] || { echo "error: only $TOTAL objects collected" >&2; exit 1; }
+
     ( cd "$WORK" && xcrun libtool -static -o "$LIB" ./*.o )
     rm -rf "$WORK"
 fi
