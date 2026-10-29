@@ -96,6 +96,17 @@ mkdir -p "${DEPS}/pcre2-build"
 banner "libffi ${LIBFFI_VERSION}"
 fetch "libffi-${LIBFFI_VERSION}" \
   "https://github.com/libffi/libffi/releases/download/v${LIBFFI_VERSION}/libffi-${LIBFFI_VERSION}.tar.gz" libffi.tar.gz
+# Apple's assembler will not take AArch64 register names in CFI directives:
+#   .cfi_def_cfa x1, 40        -> "invalid advance_loc expression"
+# That syntax is libffi's aarch64 trampoline assembly, which Apple's clang
+# assembler rejects while GNU as accepts it. Nothing in QEMU unwinds through an
+# ffi closure, so the unwind info is dropped rather than rewritten.
+LIBFFI_SRC="${DEPS}/libffi-${LIBFFI_VERSION}"
+if [ ! -f "${LIBFFI_SRC}/.aok-cfi-patched" ]; then
+    sed -i.bak -E '/^[[:space:]]*\.?cfi_[a-z_]+/d' "${LIBFFI_SRC}/src/aarch64/sysv.S"
+    touch "${LIBFFI_SRC}/.aok-cfi-patched"
+fi
+
 mkdir -p "${DEPS}/libffi-build"
 ( cd "${DEPS}/libffi-build" &&
   CC="xcrun --sdk iphoneos clang -arch arm64 -isysroot ${SDKROOT} -miphoneos-version-min=${IOS_MIN}" \

@@ -67,11 +67,13 @@ Restart=on-failure
 | Disk | `-device virtio-blk-pci,drive=hd0` | `virtio_blk` -> vda |
 | Pointer | `-device virtio-tablet-pci` | `virtio_input` (absolute) |
 | Keyboard | `-device virtio-keyboard-pci` | `virtio_input` |
-| Network | `-netdev user,id=n0 -device virtio-net-pci,netdev=n0` | `virtio_net` + DHCP |
+| Network | `-netdev user,id=n0 -device virtio-net-pci,netdev=n0` | `virtio_net` + NetworkManager DHCP |
 | Firmware console | `virtio-ramfb` + `video=Virtual-1:1280x720@60` | `simpledrm`/`virtio_gpu` |
 
-`virtio_gpu` and `virtio_input` are in `linux-modules-extra-generic`; the image script
-installs that package and runs `update-initramfs` so both are present before root is mounted.
+`virtio_gpu`, `virtio_input`, `virtio_blk` and `virtio_net` are all in the kernel's
+`linux-modules-<abi>-generic` package, which `linux-image-generic` pulls; nothing this VM
+needs lives in `linux-modules-extra` (which has no meta package on arm64 at all). The image
+script runs `update-initramfs` so they are present before root is mounted.
 
 ## 4. Rendering: the honest problem
 

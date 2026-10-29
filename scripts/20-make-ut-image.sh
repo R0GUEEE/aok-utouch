@@ -88,11 +88,8 @@ deb ${MIRROR} ${SUITE}-updates main restricted universe multiverse
 deb ${MIRROR} ${SUITE}-security main restricted universe multiverse
 EOF
 
-curl -fsSL "$UT_KEY_URL" -o "$MNT/tmp/ubports.gpg"
-install -Dm644 "$MNT/tmp/ubports.gpg" "$MNT/etc/apt/trusted.gpg.d/ubports.gpg"
-cat > "$MNT/etc/apt/sources.list.d/ubports.list" <<EOF
-deb https://repo.ubports.com/ ${UT_SUITE} main
-EOF
+# The UBports archive is HTTPS and the freshly bootstrapped root has no CA
+# store yet, so its source is added after ca-certificates is installed.
 # Flatpak and snap are noise in a VM.
 cat > "$MNT/etc/apt/preferences.d/no-snap" <<'EOF'
 Package: snapd
@@ -120,14 +117,34 @@ export DEBIAN_FRONTEND=noninteractive
 banner "base system"
 chroot "$MNT" apt-get update -qq
 chroot "$MNT" apt-get install -y -qq --no-install-recommends \
+    ca-certificates curl gnupg \
     systemd systemd-sysv initramfs-tools dbus dbus-user-session \
-    linux-image-generic linux-modules-extra-generic \
+    linux-image-generic \
     grub-efi-arm64 grub-efi-arm64-bin \
-    locales tzdata ca-certificates curl gnupg sudo less nano \
-    systemd-timesyncd systemd-networkd systemd-resolved \
+    locales tzdata sudo less nano \
+    systemd-timesyncd systemd-resolved network-manager \
     seatd libgl1-mesa-dri libegl1 libgles2 mesa-utils \
     fonts-ubuntu fontconfig udev kmod \
     >/dev/null
+
+# linux-modules-extra has no meta package on arm64; take the newest ABI build
+# if one exists. Nothing on the virtio path lives there — it is insurance for
+# exotic drivers a user might blacklist their way into needing.
+EXTRA_MODULES="$(chroot "$MNT" sh -c \
+    "apt-cache search --names-only '^linux-modules-extra-[0-9].*-generic$' \
+     | awk '{print \$1}' | sort -V | tail -1")"
+if [ -n "$EXTRA_MODULES" ]; then
+    chroot "$MNT" apt-get install -y -qq --no-install-recommends "$EXTRA_MODULES" >/dev/null
+    echo "  + $EXTRA_MODULES"
+fi
+
+banner "UBports archive"
+curl -fsSL "$UT_KEY_URL" -o "$MNT/tmp/ubports.gpg"
+install -Dm644 "$MNT/tmp/ubports.gpg" "$MNT/etc/apt/trusted.gpg.d/ubports.gpg"
+cat > "$MNT/etc/apt/sources.list.d/ubports.list" <<EOF
+deb https://repo.ubports.com/ ${UT_SUITE} main
+EOF
+chroot "$MNT" apt-get update -qq
 
 banner "Ubuntu Touch packages"
 # Checked against repo.ubports.com/dists/24.04-1.x/Contents-arm64.
@@ -196,17 +213,17 @@ WantedBy=graphical.target
 EOF
 
 chroot "$MNT" systemctl set-default graphical.target
-chroot "$MNT" systemctl enable aok-lomiri.service seatd.service systemd-networkd.service
+chroot "$MNT" systemctl enable aok-lomiri.service seatd.service NetworkManager.service
 chroot "$MNT" systemctl mask getty@tty1.service || true
 
-cat > "$MNT/etc/systemd/network/10-wired.network" <<'EOF'
-[Match]
-Name=en* vd* eth*
-
-[Network]
-DHCP=yes
+# Ubuntu Touch's indicator talks to NetworkManager, and NM brings up the
+# virtio NIC over DHCP from slirp without any configuration.
+cat > "$MNT/etc/NetworkManager/conf.d/10-aok.conf" <<'EOF'
+[main]
+dns=default
+[connection]
+ipv6.method=disabled
 EOF
-chroot "$MNT" systemctl enable systemd-networkd.service
 
 cat > "$MNT/etc/fstab" <<'EOF'
 /dev/vda2  /          ext4  defaults,noatime,errors=remount-ro  0 1
