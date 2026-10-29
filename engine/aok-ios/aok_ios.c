@@ -19,7 +19,6 @@
 #include <os/proc.h>
 #endif
 
-#include "block/aio.h"
 #include "qapi/error.h"
 #include "qapi/run-state.h"
 #include "qemu/main-loop.h"
@@ -72,12 +71,6 @@ typedef enum AokEventKind {
     AOK_EV_RESUME,
     AOK_EV_SHUTDOWN,
 } AokEventKind;
-
-typedef struct AokEvent {
-    AokEventKind kind;
-    int a;
-    int b;
-} AokEvent;
 
 static void aok_dpy_update(DisplayChangeListener *dcl, int x, int y, int w, int h)
 {
@@ -140,26 +133,24 @@ static const DisplayChangeListenerOps aok_dpy_ops = {
     .dpy_gfx_check_format = aok_dpy_check_format,
 };
 
-static void aok_event_deliver(void *opaque)
+static void aok_event_deliver(AokEventKind kind, int a, int b)
 {
-    AokEvent *e = opaque;
-
-    switch (e->kind) {
+    switch (kind) {
     case AOK_EV_KEY:
         if (S.con) {
-            qemu_input_event_send_key_linux(S.con, (unsigned int)e->a, e->b != 0);
+            qemu_input_event_send_key_linux(S.con, (unsigned int)a, b != 0);
         }
         break;
     case AOK_EV_POINTER:
         if (S.con) {
-            qemu_input_queue_abs(S.con, INPUT_AXIS_X, e->a, 0, INPUT_EVENT_ABS_MAX);
-            qemu_input_queue_abs(S.con, INPUT_AXIS_Y, e->b, 0, INPUT_EVENT_ABS_MAX);
+            qemu_input_queue_abs(S.con, INPUT_AXIS_X, a, 0, INPUT_EVENT_ABS_MAX);
+            qemu_input_queue_abs(S.con, INPUT_AXIS_Y, b, 0, INPUT_EVENT_ABS_MAX);
             qemu_input_event_sync();
         }
         break;
     case AOK_EV_BUTTON:
         if (S.con) {
-            qemu_input_queue_btn(S.con, (InputButton)e->a, e->b != 0);
+            qemu_input_queue_btn(S.con, (InputButton)a, b != 0);
             qemu_input_event_sync();
         }
         break;
@@ -177,22 +168,25 @@ static void aok_event_deliver(void *opaque)
         qemu_system_shutdown_request(SHUTDOWN_CAUSE_HOST_UI);
         break;
     }
-
-    g_free(e);
 }
 
+/*
+ * Deliver an event from any thread.
+ *
+ * The Big QEMU Lock is the documented way for a host UI thread to touch device
+ * and run-state state: QEMU's own display and input backends run in a thread of
+ * their own and take it exactly like this. The alternative - scheduling a
+ * bottom half on the main loop's AioContext - needs the main loop to actually
+ * be spinning, which it is not while the guest is paused.
+ */
 static void aok_post(AokEventKind kind, int a, int b)
 {
-    AokEvent *e;
-
-    if (!S.running) {
+    if (!__atomic_load_n(&S.running, __ATOMIC_ACQUIRE)) {
         return;
     }
-    e = g_new0(AokEvent, 1);
-    e->kind = kind;
-    e->a = a;
-    e->b = b;
-    aio_bh_schedule_oneshot(qemu_get_aio_context(), aok_event_deliver, e);
+    bql_lock();
+    aok_event_deliver(kind, a, b);
+    bql_unlock();
 }
 
 static void *aok_engine_main(void *arg)
@@ -214,8 +208,6 @@ static void *aok_engine_main(void *arg)
         }
     }
 
-    S.running = 1;
-
     /* From here until qemu_main_loop() returns this thread belongs to QEMU. */
     qemu_init(argc, argv);
 
@@ -231,6 +223,8 @@ static void *aok_engine_main(void *arg)
         S.failed = 1;
     }
 
+    /* Only now is it safe to take the BQL from another thread. */
+    __atomic_store_n(&S.running, 1, __ATOMIC_RELEASE);
     __atomic_store_n(&S.ready, 1, __ATOMIC_RELEASE);
 
     status = qemu_main_loop();
