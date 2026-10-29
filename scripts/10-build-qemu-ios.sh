@@ -214,12 +214,12 @@ else
 
     # Anything still only reachable through a QEMU archive gets flattened too,
     # after the direct objects, so the direct ones win any duplicate.
-    while read -r archive; do
+    for archive in $(cat "$QEMU_ARCHIVES"); do
         EX="$WORK/.x"
         rm -rf "$EX"; mkdir -p "$EX"
         ( cd "$EX" && ar x "$archive" 2>/dev/null ) || continue
         find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
-    done < "$QEMU_ARCHIVES"
+    done
 
     TOTAL="$(find "$WORK" -maxdepth 1 -name '*.o' | wc -l | tr -d ' ')"
     echo "flattened $TOTAL objects"
