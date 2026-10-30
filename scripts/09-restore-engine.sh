@@ -32,15 +32,38 @@ COUNT_HAVE="$(find "${ROOT}/build/qemu-ios/flatten" -name '*.o' 2>/dev/null | wc
 echo "link inputs listed: ${COUNT_WANT:-none}, objects present: ${COUNT_HAVE:-0}"
 [ "${COUNT_HAVE:-0}" -gt 700 ] || {
     echo "error: tarball has no flat engine objects" >&2; exit 1; }
-# Absolute paths from the build machine are rewritten to this checkout's copy,
-# so the response file the app links with is valid wherever it was unpacked.
+# The list holds absolute paths from whichever machine built it. Rebuild every
+# entry against this checkout: objects live in flatten/, archives either in
+# build/qemu-ios/ or in support-archives/.
 LIST="${ROOT}/build/qemu-ios/engine-link-inputs.txt"
 if [ -f "$LIST" ]; then
-    sed -i.bak -E \
-        -e "s|^/[^ ]*/build/qemu-ios/support-archives/|${ROOT}/build/qemu-ios/support-archives/|" \
-        -e "s|^/[^ ]*/build/qemu-ios/flatten/|${ROOT}/build/qemu-ios/flatten/|" \
-        "$LIST"
-    rm -f "$LIST.bak"
+    python3 - "$LIST" "${ROOT}/build/qemu-ios" <<'PY'
+import os, sys
+list_path, base = sys.argv[1], sys.argv[2]
+out = []
+seen_objects = set()
+for line in open(list_path):
+    entry = line.strip()
+    if not entry or entry.startswith("#"):
+        continue
+    name = os.path.basename(entry)
+    if entry.endswith(".o"):
+        path = os.path.join(base, "flatten", name)
+        if path in seen_objects:
+            continue
+        seen_objects.add(path)
+        out.append(path)
+    elif os.path.isfile(os.path.join(base, name)):
+        out.append(os.path.join(base, name))
+    elif os.path.isfile(os.path.join(base, "support-archives", name)):
+        out.append(os.path.join(base, "support-archives", name))
+    else:
+        print(f"warning: cannot locate {name}", file=sys.stderr)
+        out.append(entry)
+with open(list_path, "w") as handle:
+    handle.write("\n".join(out) + "\n")
+print(f"rewrote {len(out)} link inputs")
+PY
 fi
 MISSING=0
 for archive in $(grep '\.a$' "$LIST" 2>/dev/null); do
