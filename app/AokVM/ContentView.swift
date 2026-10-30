@@ -23,6 +23,7 @@ struct SetupView: View {
     @State private var importing = false
     @State private var showingConsole = false
     @State private var importError: String?
+    @State private var confirmingDelete = false
 
     private let resolutions: [(String, Int, Int)] = [
         ("1280 x 720", 1280, 720),
@@ -44,8 +45,7 @@ struct SetupView: View {
                                 .font(.caption.monospacedDigit())
                         }
                     } else if runtime.hasGuest {
-                        LabeledContent("Image", value: runtime.importedImageURL == nil
-                                       ? "Alpine (bundled)" : runtime.config.imageName)
+                        LabeledContent("Image", value: runtime.activeGuestLabel)
                         let attributes = try? FileManager.default
                             .attributesOfItem(atPath: runtime.imageURL.path)
                         let bytes = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
@@ -62,8 +62,11 @@ struct SetupView: View {
 
                     Button("Import a different image…") { importing = true }
                     if runtime.importedImageURL != nil, runtime.preparing == nil {
-                        Button("Use the bundled guest again", role: .destructive) {
+                        Button("Use the bundled guest again") {
                             runtime.resetGuest()
+                        }
+                        Button("Delete the imported image", role: .destructive) {
+                            confirmingDelete = true
                         }
                     }
                     if let importError {
@@ -111,6 +114,17 @@ struct SetupView: View {
                 }
             }
             .navigationTitle("AOK VM")
+            .confirmationDialog("Delete the imported image?",
+                                isPresented: $confirmingDelete,
+                                titleVisibility: .visible) {
+                Button("Delete \(runtime.config.imageName)", role: .destructive) {
+                    runtime.removeImportedImage()
+                }
+                Button("Keep it", role: .cancel) {}
+            } message: {
+                Text("The file is removed from the app's Documents folder. The bundled "
+                     + "Alpine guest stays available either way.")
+            }
             .fileImporter(isPresented: $importing,
                           allowedContentTypes: [.data],
                           allowsMultipleSelection: false) { result in
@@ -188,6 +202,9 @@ struct VMScreen: View {
                   ? "pause.circle" : "cpu")
                 .font(.caption)
                 .labelStyle(.titleAndIcon)
+            Text(runtime.activeGuestLabel)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
 
             Spacer()
 

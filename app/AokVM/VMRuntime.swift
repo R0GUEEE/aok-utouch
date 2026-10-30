@@ -95,6 +95,25 @@ final class VMRuntime: ObservableObject {
     var hasGuest: Bool {
         FileManager.default.fileExists(atPath: imageURL.path)
     }
+
+    /// What the next start will boot, for the UI to show.
+    var activeGuestLabel: String {
+        importedImageURL == nil ? "Alpine (bundled)" : config.imageName
+    }
+
+    /// Size of the active image, if it can be read.
+    var activeGuestBytes: Int64 {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: imageURL.path)
+        return (attributes?[.size] as? NSNumber)?.int64Value ?? 0
+    }
+
+    /// Delete the imported image and go back to the bundled guest.
+    func removeImportedImage() {
+        guard let url = importedImageURL else { return }
+        try? FileManager.default.removeItem(at: url)
+        config.imageName = ""
+        state = .idle
+    }
     var logURL: URL { documents.appendingPathComponent("engine.log") }
 
     init() { load() }
