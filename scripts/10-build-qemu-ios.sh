@@ -29,6 +29,7 @@ pack() {
     mkdir -p "$BUILD/prebuilt"
     tar -czf "$TARBALL" -C "$BUILD" \
         qemu-ios/flatten \
+        qemu-ios/support-archives \
         qemu-ios/engine-link-inputs.txt \
         "qemu-ios/.aok-qemu-${HASH}" \
         qemu-ios/BUILDINFO \
@@ -248,6 +249,12 @@ else
     done
     for archive in $(cat "$THIRD_PARTY"); do
         echo "$archive" >> "$OBJECT_LIST_OUT"
+    done
+    # The third-party archive members (libqemuutil, dtc, slirp) are named by
+    # absolute path in the list, and the app needs the files to exist.
+    mkdir -p "$OUT/support-archives"
+    for archive in $(cat "$THIRD_PARTY"); do
+        cp "$archive" "$OUT/support-archives/$(basename "$archive")"
     done
     rm -f "$LIB"   # superseded: the flat object list is what the app links
 fi

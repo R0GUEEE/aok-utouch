@@ -32,9 +32,16 @@ COUNT_HAVE="$(find "${ROOT}/build/qemu-ios/flatten" -name '*.o' 2>/dev/null | wc
 echo "link inputs listed: ${COUNT_WANT:-none}, objects present: ${COUNT_HAVE:-0}"
 [ "${COUNT_HAVE:-0}" -gt 700 ] || {
     echo "error: tarball has no flat engine objects" >&2; exit 1; }
+MISSING=0
 for archive in $(grep '\.a$' "${ROOT}/build/qemu-ios/engine-link-inputs.txt" 2>/dev/null); do
-    [ -f "$archive" ] || echo "warning: missing archive $archive" >&2
+    if [ ! -f "$archive" ]; then
+        # Paths are absolute from the machine that built the tarball; resolve
+        # the basename against the support-archives directory instead.
+        alt="${ROOT}/build/qemu-ios/support-archives/$(basename "$archive")"
+        [ -f "$alt" ] || { echo "error: missing archive $archive" >&2; MISSING=1; }
+    fi
 done
+[ "$MISSING" = 0 ] || exit 1
 [ -d "${ROOT}/build/qemu-headers/include" ] || {
     echo "error: tarball has no qemu-headers/include" >&2; exit 1; }
 
