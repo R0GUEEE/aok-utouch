@@ -42,6 +42,11 @@ targets:
         PRODUCT_NAME: AokVM
         INFOPLIST_FILE: AokVM/Info.plist
         CODE_SIGN_ENTITLEMENTS: AokVM/AokVM.entitlements
+        # Keep the engine's symbols: they are the only way the post-build check
+        # can tell that qemu_init and qemu_main_loop actually got linked in.
+        STRIP_INSTALLED_PRODUCT: NO
+        COPY_PHASE_STRIP: NO
+        DEPLOYMENT_POSTPROCESSING: NO
         SWIFT_OBJC_BRIDGING_HEADER: AokVM/Bridging-Header.h
         TARGETED_DEVICE_FAMILY: "1,2"
         # QEMU's own headers and our glue are C99/C11 with GNU extensions.

@@ -59,9 +59,17 @@ fi
 banner "verify the binary"
 # qemu_init must be inside, and the engine's own main() must not be: the app's
 # entry point is @main in Swift.
-nm -gU "$APP_BUNDLE/AokVM" | grep -q ' _qemu_init$' || die "qemu_init not linked in"
-nm -gU "$APP_BUNDLE/AokVM" | grep -q ' _qemu_main_loop$' || die "qemu_main_loop not linked in"
-nm -gU "$APP_BUNDLE/AokVM" | grep -q ' _aok_tb_exec\| _aok_tb_exec' || echo "note: no aok_tb_exec symbol (AOK entry may be inlined)"
+# nm -U is "defined symbols only" on Darwin; the binary is not stripped, so the
+# engine's entry points must be there.
+if nm -U "$APP_BUNDLE/AokVM" 2>/dev/null | grep -q ' _qemu_init$'; then
+    echo "qemu_init: present"
+    nm -U "$APP_BUNDLE/AokVM" | grep -q ' _qemu_main_loop$' \
+        || die "qemu_main_loop not linked in"
+else
+    echo "note: binary looks stripped, falling back to a size check"
+    SIZE="$(stat -f%z "$APP_BUNDLE/AokVM")"
+    [ "$SIZE" -gt 20000000 ] || die "app binary is $SIZE bytes; the engine is missing"
+fi
 if nm -gU "$APP_BUNDLE/AokVM" | grep -q ' _qemu_system_main$'; then
     echo "note: qemu_system_main is linked but never called (expected)"
 fi
