@@ -27,6 +27,14 @@ MNT="${WORK}/mnt"
 LOOP=""
 
 banner() { printf '\n== %s\n' "$*"; }
+
+# du walks /proc and /sys too, where entries vanish while it reads them; that
+# makes it exit non-zero and, under set -e, takes the build with it.
+root_used_mb() {
+    du -sm --exclude=proc --exclude=sys --exclude=dev --exclude=run "$MNT" 2>/dev/null \
+        | cut -f1 || echo 0
+}
+
 die() { echo "error: $*" >&2; exit 1; }
 
 [ "$(id -u)" = 0 ] || die "run as root (debootstrap, loop mounts, chroot)"
@@ -263,10 +271,10 @@ rm -rf "$MNT"/var/lib/apt/lists/* "$MNT"/var/cache/apt/archives/*.deb
 find "$MNT/usr/share/doc" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 find "$MNT/usr/share/man" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
 find "$MNT" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
-du -sm "$MNT" | sed 's/^/  rootfs now: /'
+echo "  rootfs now: $(root_used_mb) MB"
 
 banner "manifest"
-ROOT_MB="$(du -sm "$MNT" | cut -f1)"
+ROOT_MB="$(root_used_mb)"
 cat > "${OUT%.img}.manifest" <<EOF
 guest=ubuntu-touch
 name=Ubuntu Touch 24.04-1.x (Lomiri)

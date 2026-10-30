@@ -33,6 +33,14 @@ MNT="${WORK}/mnt"
 LOOP=""
 
 banner() { printf '\n== %s\n' "$*"; }
+
+# du walks /proc and /sys too, where entries vanish while it reads them; that
+# makes it exit non-zero and, under set -e, takes the build with it.
+root_used_mb() {
+    du -sm --exclude=proc --exclude=sys --exclude=dev --exclude=run "$MNT" 2>/dev/null \
+        | cut -f1 || echo 0
+}
+
 die() { echo "error: $*" >&2; exit 1; }
 
 [ "$(id -u)" = 0 ] || die "run as root (loop mounts, chroot)"
@@ -168,7 +176,7 @@ chroot "$MNT" mkinitfs -o /boot/initramfs-virt "$(ls "$MNT/lib/modules" | head -
 ls -l "$MNT/boot/" | sed 's/^/  /'
 
 banner "manifest"
-ROOT_MB="$(du -sm "$MNT" | cut -f1)"
+ROOT_MB="$(root_used_mb)"
 cat > "${OUT%.img}.manifest" <<EOF
 guest=alpine
 name=Alpine ${REL} (OpenRC)
@@ -211,7 +219,7 @@ cp "$MNT/boot/efi/grub/grub.cfg" "$MNT/boot/efi/EFI/BOOT/grub.cfg"
 ls -l "$MNT/boot/efi/EFI/BOOT/" | sed 's/^/  /'
 
 banner "report"
-du -sh "$MNT" 2>/dev/null | sed 's/^/  rootfs: /' || true
+echo "  rootfs: $(root_used_mb) MB"
 du -sh "$MNT/boot/efi" 2>/dev/null | sed 's/^/  esp: /' || true
 find "$MNT/boot/efi" -maxdepth 2 -type f 2>/dev/null | sed 's/^/  /' || true
 
