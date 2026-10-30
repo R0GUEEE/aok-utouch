@@ -260,15 +260,27 @@ cat > "$MNT/etc/fstab" <<'EOF'
 EOF
 
 banner "trim"
-# One package at a time, each allowed to fail: a postrm script that exits
-# non-zero used to take the whole build down at this point.
-for pkg in apport whoopsie unattended-upgrades ubuntu-report modemmanager \
-           bluez wpa_supplicant tracker tracker-miner-fs cloud-init; do
-    chroot "$MNT" dpkg -s "$pkg" >/dev/null 2>&1 || continue
-    chroot "$MNT" apt-get purge -y -qq "$pkg" >/dev/null 2>&1 \
-        || echo "  note: could not purge $pkg" >&2
-done
-chroot "$MNT" apt-get autoremove -y -qq >/dev/null
+# Trimming is an optimisation, never a reason to fail: Ubuntu Touch ships
+# maintainer scripts that expect a running systemd and do not survive a purge in
+# a chroot (bluez is one). Run the whole thing in a subshell with -e off and
+# leave dpkg configured afterwards, so the rest of the build can continue.
+(
+    set +e
+    for pkg in apport whoopsie unattended-upgrades ubuntu-report modemmanager \
+               bluez wpa_supplicant tracker tracker-miner-fs cloud-init; do
+        chroot "$MNT" dpkg -s "$pkg" >/dev/null 2>&1 || continue
+        chroot "$MNT" apt-get purge -y -qq "$pkg" >/dev/null 2>&1 \
+            || echo "  note: could not purge $pkg" >&2
+        chroot "$MNT" dpkg --configure -a >/dev/null 2>&1
+    done
+    chroot "$MNT" apt-get autoremove -y -qq >/dev/null 2>&1
+    chroot "$MNT" apt-get clean >/dev/null 2>&1
+    # A half-configured package would make the image fail at first boot instead
+    # of here, which is much harder to see.
+    chroot "$MNT" dpkg --configure -a >/dev/null 2>&1
+    chroot "$MNT" dpkg --audit 2>&1 | sed 's/^/  dpkg audit: /'
+    true
+)
 
 banner "strip"
 # A 5 GB image has no room for /usr/share/doc and a package cache, and neither
