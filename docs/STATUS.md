@@ -24,6 +24,21 @@ The disc image was checked locally, not just built: GPT signature `EFI PART`, pa
 The binary contains `qemu-system-aarch64` and `aok-engine`, and `file(1)` reports
 `flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE>`, so nothing is missing at load time.
 
+## First device run, 2026-10-30
+
+The app launched and got as far as building the machine, then `qemu_init` exited:
+
+```
+rom: file vgabios-ramfb.bin : error Failed to open file "vgabios-ramfb.bin"
+qemu-system-aarch64: -device virtio-net-pci,netdev=n0: failed to find romfile "efi-virtio.rom"
+```
+
+QEMU resolves option ROMs relative to its data directory (`/usr/local/share/qemu` from the
+build), which does not exist on iOS, and `virtio-ramfb`/`virtio-net-pci` both attach one.
+Both files are checked-in blobs in `pc-bios`, so they now ship in the bundle and the app
+passes `-L <bundle>/pc-bios`: 43 ROM files, 4.3 MB, `vgabios-ramfb.bin` and `efi-virtio.rom`
+among them. The app build asserts those two exist, so this cannot regress silently.
+
 ## How the engine is packaged (this changed)
 
 It is **not** a static archive. QEMU links the emulator with
