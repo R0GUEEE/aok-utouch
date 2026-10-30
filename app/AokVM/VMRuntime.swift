@@ -177,6 +177,12 @@ final class VMRuntime: ObservableObject {
 
         let args = buildArguments()
         log.info("starting engine with \(args.count) arguments")
+        // The exact command line, next to the engine log: the first thing to
+        // look at when QEMU complains about a path or a device.
+        let argsFile = documents.appendingPathComponent("Logs/last-args.txt")
+        try? FileManager.default.createDirectory(
+            at: argsFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? args.joined(separator: "\n").write(to: argsFile, atomically: true, encoding: .utf8)
         state = .booting
 
         let result = args.withCStrings { argv, count in
@@ -307,7 +313,10 @@ final class VMRuntime: ObservableObject {
             "-drive", "if=none,id=hd0,format=raw,cache=writeback,file=\(imageURL.path)",
             "-device", "virtio-blk-pci,drive=hd0",
             "-netdev", "user,id=n0",
-            "-device", "virtio-net-pci,netdev=n0",
+            // romfile= disables the option ROM outright: PXE boot is useless
+            // here, and a missing efi-virtio.rom should not be able to kill
+            // the machine before the guest starts.
+            "-device", "virtio-net-pci,netdev=n0,romfile=",
             "-device", "virtio-keyboard-pci",
             "-device", "virtio-tablet-pci",
             "-display", "none",

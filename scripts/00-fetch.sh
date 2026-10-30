@@ -75,6 +75,36 @@ if ! grep -q 'CONFIG_TCG_THREADED_INTERPRETER' "$SRC/qemu/tcg/region.c"; then
     exit 1
 fi
 
+# 3. util/qemu-config.c keeps drive-interface registrations in a fixed array:
+#
+#        QemuOptsList *drive_config_groups[5];        /* 4 + NULL terminator */
+#
+# and qemu_add_drive_opts() aborts the process when it runs out:
+#
+#        fprintf(stderr, "ran out of space in drive_config_groups");
+#
+# That abort happens at module init, before any argument is parsed, so it is not
+# something a command line can avoid. A full aarch64-softmmu build with every
+# block interface linked registers more than four; upstream links a narrower
+# set. Widen the table instead of guessing which interface to drop.
+QCFG="$SRC/qemu/util/qemu-config.c"
+if grep -q 'QemuOptsList \*drive_config_groups\[5\];' "$QCFG"; then
+    python3 - "$QCFG" <<'PY'
+import sys
+path = sys.argv[1]
+text = open(path).read()
+old = "QemuOptsList *drive_config_groups[5];"
+new = "QemuOptsList *drive_config_groups[32];"
+assert old in text, "pattern moved"
+open(path, "w").write(text.replace(old, new, 1))
+print("widened drive_config_groups: 5 -> 32")
+PY
+else
+    grep -q 'drive_config_groups\[32\];' "$QCFG" \
+        && echo "drive_config_groups already widened" \
+        || echo "warning: util/qemu-config.c changed; check drive_config_groups by hand" >&2
+fi
+
 banner "pins"
 {
     echo "qemu_branch=$QEMU_BRANCH"
