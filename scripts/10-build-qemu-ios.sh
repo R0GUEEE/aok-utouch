@@ -216,7 +216,14 @@ else
         case "$input" in
             \#*) continue ;;
             *.o)
-                cp "$OUT/$input" "$WORK/$(basename "$input")" 2>/dev/null || true
+                base="$(basename "$input")"
+                # system/main.c is QEMU's own entry point. The app has one, and
+                # this glue drives qemu_init()/qemu_main_loop() directly, so the
+                # object is dropped rather than renamed.
+                case "$base" in
+                    system_main.c.o) continue ;;
+                esac
+                cp "$OUT/$input" "$WORK/$base" 2>/dev/null || true
                 ;;
         esac
     done < "$LIST"
