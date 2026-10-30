@@ -2,17 +2,20 @@
 
 ## The pipeline is green
 
-`pipeline` run **41017493124** on `f81d6ed` built every product, on
+`pipeline` run **41020168581** on `fd20c40` built every product, on
 `macos-15-intel`:
 
 | Artifact | Size | What it is |
 |---|---|---|
-| `AokVM-unsigned.ipa` | 25,669,268 B | The app. `Payload/AokVM.app/AokVM` is a 342 MB Mach-O arm64 executable with `NOUNDEFS` — the whole engine resolved at link time |
+| `AokVM-unsigned.ipa` | 124,247,279 B | The app **and the guest**: `Payload/AokVM.app/AokVM` is a 342 MB Mach-O arm64 executable with `NOUNDEFS`, next to `alpine.img.gz` (100,124,380 B) |
 | `alpine.img` | 1,073,741,958 B | **The guest**: GPT, 128 MiB ESP + ext4 root, Alpine 3.24.3, 175 MB used |
 | `qemu-engine` | 121,367,693 B | Flat object set + headers + edk2 blobs (~1212 objects) |
 | `ios-sysroot` | 21,585,040 B | glib 2.82.2, pixman 0.43.4, pcre2 10.44, libffi 3.4.6, libslirp 4.9.1 |
 
-IPA sha256: `ac2a426ce5dadbe0618a661393a0c58ea3a096b10333ff1253ff79a69c2c1a42`.
+The guest travels inside the app: `30-build-app.sh` gzips the image into the bundle
+(1 GiB sparse → 96 MB) and `GuestImage.installIfNeeded` streams it into Application Support on
+first start. Checked by taking the `.gz` out of the IPA and gunzipping it: byte-identical
+sha256 to the `alpine.img` from the same run (`aad97de4ebee9821…`).
 
 The disc image was checked locally, not just built: GPT signature `EFI PART`, partition 1
 `ESP` (FAT32 magic `FAT32`), partition 2 `root` starting at 129 MiB with an ext4 superblock
