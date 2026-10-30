@@ -26,6 +26,18 @@ for blob in edk2-aarch64-code.fd edk2-arm-vars.fd; do
 done
 ls -lh "${APP}/AokVM/Resources"
 
+banner "option ROMs"
+ROMS="${BUILD}/firmware/pc-bios"
+[ -d "$ROMS" ] || die "no option ROMs in $ROMS — rebuild the engine (10-build-qemu-ios.sh)"
+rm -rf "${APP}/AokVM/Resources/pc-bios"
+mkdir -p "${APP}/AokVM/Resources/pc-bios"
+cp "${ROMS}"/*.bin "${ROMS}"/*.rom "${APP}/AokVM/Resources/pc-bios/"
+for required in vgabios-ramfb.bin efi-virtio.rom; do
+    [ -f "${APP}/AokVM/Resources/pc-bios/${required}" ] \
+        || die "missing ${required}: qemu_init would exit on the first device"
+done
+du -sh "${APP}/AokVM/Resources/pc-bios"
+
 banner "guest image"
 # The guest travels inside the app: ~1 GiB of mostly zeroes compresses to a few
 # tens of MB and is unpacked into Application Support on first start.

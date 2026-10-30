@@ -275,11 +275,27 @@ final class VMRuntime: ObservableObject {
         return max(768, min(want, availableMiB - 900))
     }
 
+    /// QEMU finds option ROMs (vgabios-ramfb.bin, efi-virtio.rom) relative to
+    /// the -L path; without it it looks in /usr/local/share/qemu and exits.
+    private var romDirectory: URL? {
+        guard let url = Bundle.main.resourceURL?.appendingPathComponent("pc-bios"),
+              FileManager.default.fileExists(atPath: url.appendingPathComponent("vgabios-ramfb.bin").path)
+        else { return nil }
+        return url
+    }
+
     func buildArguments() -> [String] {
         let fw = documents
         var args: [String] = [
             "qemu-system-aarch64",
             "-name", "aok-utouch",
+        ]
+        if let roms = romDirectory {
+            args += ["-L", roms.path]
+        } else {
+            log.error("no pc-bios directory in the bundle; devices needing ROMs will fail")
+        }
+        args += [
             "-M", "virt,highmem=on",
             "-cpu", "max",
             "-smp", "\(max(1, min(config.cpus, 4)))",

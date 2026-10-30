@@ -311,6 +311,17 @@ for blob in edk2-aarch64-code.fd edk2-arm-vars.fd; do
         fi
     done
 done
+# Option ROMs: QEMU looks these up by name at device realise time and exits if
+# they are missing (vgabios-ramfb.bin for virtio-ramfb, efi-virtio.rom for
+# virtio-net-pci). They are checked-in blobs in pc-bios, a few hundred KB in
+# total, and the app passes -L <bundle>/pc-bios.
+mkdir -p "$BUILD/firmware/pc-bios"
+for rom in "$SRC"/pc-bios/*.bin "$SRC"/pc-bios/*.rom; do
+    [ -f "$rom" ] || continue
+    cp "$rom" "$BUILD/firmware/pc-bios/"
+done
+echo "option ROMs staged: $(ls "$BUILD/firmware/pc-bios" | wc -l | tr -d ' ') files, $(du -sh "$BUILD/firmware/pc-bios" | cut -f1)"
+
 [ -s "$BUILD/firmware/edk2-aarch64-code.fd" ] || {
     echo "error: edk2 aarch64 firmware not found in build or source pc-bios" >&2
     ls -1 "$SRC/pc-bios" | grep -i edk2 >&2 || true

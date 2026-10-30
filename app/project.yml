@@ -33,7 +33,14 @@ targets:
     type: application
     platform: iOS
     sources:
+      # Everything but pc-bios, which has to stay a directory: QEMU resolves
+      # ROM names relative to the -L path we hand it.
       - path: AokVM
+        excludes:
+          - "Resources/pc-bios/**"
+      - path: AokVM/Resources/pc-bios
+        type: folder
+        buildPhase: resources
       - path: ../engine/aok-ios/aok_ios.c
         name: engine
     settings:

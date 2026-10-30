@@ -6,3 +6,4 @@ versions.env
 *.img
 .DS_Store
 app/AokVM/Resources/*.gz
+app/AokVM/Resources/pc-bios/
