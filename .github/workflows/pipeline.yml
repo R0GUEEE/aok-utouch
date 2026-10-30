@@ -224,7 +224,9 @@ jobs:
         run: |
           sudo apt-get update
           # debootstrap for the Ubuntu Touch guest, the rest for both.
-          sudo apt-get install -y debootstrap parted dosfstools e2fsprogs grub-efi-arm64-bin
+          # zerofree is what keeps the Ubuntu Touch bundle near 1 GB instead of 3.
+          sudo apt-get install -y debootstrap parted dosfstools e2fsprogs \
+            grub-efi-arm64-bin zerofree
 
       - name: Build Alpine guest
         run: sudo bash scripts/20-make-alpine-image.sh "$PWD/build/guest/alpine.img"

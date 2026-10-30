@@ -323,6 +323,18 @@ for d in dev/pts dev proc sys run boot/efi; do
     mountpoint -q "${MNT}/${d}" && umount -lf "${MNT}/${d}"
 done
 umount -lf "$MNT"
+
+# Freed blocks still hold whatever they held before: apt's cache, /usr/share/doc,
+# every package it unpacked and then removed. gzip cannot compress that, and the
+# image landed at 3.0 GB compressed instead of ~1.1. Writing zeroes over the free
+# space is what makes the difference.
+banner "zero free space"
+if command -v zerofree >/dev/null 2>&1; then
+    zerofree -v "$ROOTDEV" 2>&1 | tail -2 | sed 's/^/  /'
+else
+    echo "  note: zerofree not installed; the bundle will be much larger" >&2
+fi
+
 losetup -d "$LOOP"; LOOP=""
 trap - EXIT
 

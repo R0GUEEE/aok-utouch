@@ -52,7 +52,9 @@ rm -f "${APP}/AokVM/Resources/guest.img.gz" "${APP}/AokVM/Resources/guest.json"
 if [ -n "$GUEST" ] && [ -f "$GUEST" ]; then
     NAME="$(sed -n 's/^name=//p' "${GUEST%.img}.manifest" 2>/dev/null | head -1)"
     [ -n "$NAME" ] || NAME="$(basename "$GUEST" .img)"
-    gzip -9 -c "$GUEST" > "${APP}/AokVM/Resources/guest.img.gz"
+    # -6, not -9: on a multi-gigabyte image the difference is ~1% of size for
+    # several minutes of runner time.
+    gzip -6 -c "$GUEST" > "${APP}/AokVM/Resources/guest.img.gz"
     cat > "${APP}/AokVM/Resources/guest.json" <<EOF
 {"name": "${NAME}", "source": "$(basename "$GUEST")"}
 EOF
