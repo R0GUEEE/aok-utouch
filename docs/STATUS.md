@@ -2,17 +2,22 @@
 
 ## The pipeline is green
 
-`pipeline` run **41010497241** on `c641b16` built every product, on
+`pipeline` run **41017493124** on `f81d6ed` built every product, on
 `macos-15-intel`:
 
 | Artifact | Size | What it is |
 |---|---|---|
-| `AokVM-unsigned.ipa` | 25,539,346 B | The app. `Payload/AokVM.app/AokVM` is a 342 MB Mach-O arm64 executable with `NOUNDEFS` — the whole engine resolved at link time |
+| `AokVM-unsigned.ipa` | 25,669,268 B | The app. `Payload/AokVM.app/AokVM` is a 342 MB Mach-O arm64 executable with `NOUNDEFS` — the whole engine resolved at link time |
+| `alpine.img` | 1,073,741,958 B | **The guest**: GPT, 128 MiB ESP + ext4 root, Alpine 3.24.3, 175 MB used |
 | `qemu-engine` | 121,367,693 B | Flat object set + headers + edk2 blobs (~1212 objects) |
 | `ios-sysroot` | 21,585,040 B | glib 2.82.2, pixman 0.43.4, pcre2 10.44, libffi 3.4.6, libslirp 4.9.1 |
-| `ut-2404-arm64.img` | 8,589,934,852 B | Ubuntu 24.04 + UBports 24.04-1.x, Lomiri, arm64 |
 
-IPA sha256: `490b58de18ef55a43c0d9c1cc953ee750b527afcf6e14e6d8425c28415ea2a6a`.
+IPA sha256: `ac2a426ce5dadbe0618a661393a0c58ea3a096b10333ff1253ff79a69c2c1a42`.
+
+The disc image was checked locally, not just built: GPT signature `EFI PART`, partition 1
+`ESP` (FAT32 magic `FAT32`), partition 2 `root` starting at 129 MiB with an ext4 superblock
+(`0xEF53`), and on the ESP `vmlinuz-virt`, `initramfs-virt`, `grub/grub.cfg`,
+`EFI/BOOT/BOOTAA64.EFI`.
 The binary contains `qemu-system-aarch64` and `aok-engine`, and `file(1)` reports
 `flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE>`, so nothing is missing at load time.
 
@@ -56,13 +61,15 @@ on restore.
 
 ## Not verified
 
-* **The guest has never booted.** Everything above proves the app links and
+* **The guest has never booted.** It is assembled from packages that exist, its filesystem
+  verifies, and the loader is installed — none of which is a boot. Everything above proves the app links and
   packages; it does not prove Lomiri starts, that the kernel finds its root, or
   that the display listener gets a frame. That is M4.
-* The 8.6 GB image is over the default import ceiling for some file providers;
-  `SIZE=4G` is a better default and untested.
-* Multi-touch is still absent (no touch device in this QEMU tree), so Lomiri runs
-  pointer-driven.
+* The framebuffer console needs `virtio_gpu` to load. If the screen stays black while the
+  serial log in `Documents/Logs/engine.log` reaches a login prompt, that is the module to
+  look for.
+* Multi-touch is still absent (no touch device in this QEMU tree), so the pointer is the
+  only pointing device.
 * The workflow has never run on GitHub. It is YAML-valid and every script it
   calls passes `bash -n`, but the first real run will find things — the usual
   candidates are glib's cross-build options and macOS runner image drift.
