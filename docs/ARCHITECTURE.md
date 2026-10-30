@@ -69,7 +69,7 @@ Command line the app builds (one string per element, no shell):
 -drive if=pflash,format=raw,readonly=on,file=edk2-aarch64-code.fd
 -drive if=pflash,format=raw,file=edk2-arm-vars.fd
 -device virtio-ramfb                 # firmware console, then virtio-gpu scanout
--drive if=none,id=hd0,file=alpine.img,format=raw,cache=writeback
+-drive if=none,id=hd0,file=<Application Support>/AokVM/guest.img,format=raw,cache=writeback
 -device virtio-blk-pci,drive=hd0
 -netdev user,id=n0 -device virtio-net-pci,netdev=n0
 -device virtio-keyboard-pci
@@ -91,6 +91,15 @@ p2  rest     ext4                Alpine 3.24 + apk + OpenRC, ~300 MB used
 The guest is prepared, not assembled at runtime: hostname `aok`, DHCP on `eth0`, OpenRC
 services enabled (`hostname`, `networking`, `syslog`, `crond`), `mkinitfs` features
 `virtio ext4`, and gettys on `tty1`, `tty2` and `ttyAMA0`. Nothing depends on systemd.
+
+## 3a. How the guest gets there
+
+`scripts/30-build-app.sh` gzips the built image into `AokVM.app/alpine.img.gz` (1 GiB sparse
+→ ~100 MB). On first start `GuestImage.installIfNeeded` streams it through `gzread` into
+`Library/Application Support/AokVM/guest.img`, 1 MB at a time, publishing progress, writing to
+`guest.img.partial` and moving it into place only after the whole stream is out — a killed app
+never leaves a half-written guest. The file is excluded from iCloud backup. An image imported
+by hand lives in Documents and takes precedence; `resetGuest()` deletes and re-unpacks.
 
 ## 4. Display pipeline
 

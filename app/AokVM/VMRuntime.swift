@@ -68,6 +68,8 @@ private func aokExitTrampoline(_ ctx: UnsafeMutableRawPointer?, _ status: Int32)
 final class VMRuntime: ObservableObject {
     @Published private(set) var state: VMState = .idle
     @Published private(set) var consoleText: String = ""
+    /// Non-nil while the bundled guest is being unpacked, 0...1.
+    @Published private(set) var preparing: Double?
     @Published var config = VMConfig() {
         didSet { if oldValue != config { save() } }
     }
@@ -79,7 +81,20 @@ final class VMRuntime: ObservableObject {
     private let configKey = "AokVM.config"
 
     var documents: URL { FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0] }
-    var imageURL: URL { documents.appendingPathComponent(config.imageName) }
+
+    /// An imported image wins; otherwise the guest that shipped in the app.
+    var importedImageURL: URL? {
+        guard !config.imageName.isEmpty else { return nil }
+        let candidate = documents.appendingPathComponent(config.imageName)
+        return FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
+    }
+
+    var imageURL: URL { importedImageURL ?? GuestImage.url }
+
+    /// True when there is something to boot, either way round.
+    var hasGuest: Bool {
+        FileManager.default.fileExists(atPath: imageURL.path)
+    }
     var logURL: URL { documents.appendingPathComponent("engine.log") }
 
     init() { load() }
@@ -102,10 +117,49 @@ final class VMRuntime: ObservableObject {
 
     func start() {
         guard state == .idle || state == .stopped || isFailed else { return }
-        guard FileManager.default.fileExists(atPath: imageURL.path) else {
-            state = .failed("No disk image named \(config.imageName)")
+        guard hasGuest else {
+            unpackBundledGuest(thenStart: true)
             return
         }
+        startEngine()
+    }
+
+    /// Unpacks the guest that ships in the bundle. Runs off the main thread;
+    /// `progress` is published so the setup screen can show it.
+    private func unpackBundledGuest(thenStart: Bool) {
+        guard preparing == nil else { return }
+        guard GuestImage.bundledURL != nil else {
+            state = .failed("no guest image bundled and none imported")
+            return
+        }
+        preparing = 0
+        Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                try GuestImage.installIfNeeded { fraction in
+                    Task { @MainActor [weak self] in self?.preparing = fraction }
+                }
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    self.preparing = nil
+                    if thenStart { self.startEngine() }
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.preparing = nil
+                    self?.state = .failed("could not unpack the guest: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    func resetGuest() {
+        guard state == .idle || state == .stopped || isFailed else { return }
+        try? GuestImage.reset()
+        config.imageName = ""
+        state = .idle
+    }
+
+    private func startEngine() {
         guard prepareVarsFirmware() else {
             state = .failed("Missing edk2 firmware in the bundle")
             return

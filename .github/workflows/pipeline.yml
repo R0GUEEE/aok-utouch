@@ -163,7 +163,9 @@ jobs:
 
   app:
     name: app (unsigned .ipa)
-    needs: [deps, engine]
+    # The guest ships inside the app, so the IPA waits for the image. If the
+    # image fails there is nothing worth installing anyway.
+    needs: [deps, engine, image]
     runs-on: ${{ vars.MACOS_RUNNER || 'macos-15-intel' }}
     timeout-minutes: 40
     steps:
@@ -172,7 +174,7 @@ jobs:
       - name: Toolchain
         run: brew install xcodegen
 
-      - name: Restore prebuilt deps and engine
+      - name: Restore prebuilt deps, engine and guest
         uses: actions/download-artifact@v4
         with:
           path: build/prebuilt
@@ -186,8 +188,10 @@ jobs:
           bash scripts/09-restore-engine.sh "$(ls build/prebuilt/qemu-aarch64-ios-*.tar.gz | head -1)"
 
       - name: Build
-        # No QEMU checkout, no glib build, no meson: only Swift, C and the .metal
-        # shaders are compiled here.
+        # No QEMU checkout, no glib build, no meson: only Swift, C, the .metal
+        # shaders and the gzip of the guest image.
+        env:
+          GUEST_IMAGE: build/prebuilt/alpine.img
         run: bash scripts/30-build-app.sh
 
       - uses: actions/upload-artifact@v4

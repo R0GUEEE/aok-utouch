@@ -34,9 +34,18 @@ struct SetupView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Disk image") {
-                    if FileManager.default.fileExists(atPath: runtime.imageURL.path) {
-                        LabeledContent("Image", value: runtime.config.imageName)
+                Section("Guest") {
+                    if let fraction = runtime.preparing {
+                        ProgressView(value: fraction) {
+                            Text("Unpacking the bundled Alpine guest")
+                                .font(.footnote)
+                        } currentValueLabel: {
+                            Text("\(Int(fraction * 100))%")
+                                .font(.caption.monospacedDigit())
+                        }
+                    } else if runtime.hasGuest {
+                        LabeledContent("Image", value: runtime.importedImageURL == nil
+                                       ? "Alpine (bundled)" : runtime.config.imageName)
                         let attributes = try? FileManager.default
                             .attributesOfItem(atPath: runtime.imageURL.path)
                         let bytes = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
@@ -44,12 +53,19 @@ struct SetupView: View {
                                        value: ByteCountFormatter.string(fromByteCount: bytes,
                                                                         countStyle: .file))
                     } else {
-                        Text("No image imported. Import the raw disk image built with " +
-                             "scripts/20-make-alpine-image.sh.")
+                        Text("The Alpine guest that ships with the app is unpacked into "
+                             + "Application Support the first time you start it — about "
+                             + "175 MB. No import needed.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
-                    Button("Import image…") { importing = true }
+
+                    Button("Import a different image…") { importing = true }
+                    if runtime.importedImageURL != nil, runtime.preparing == nil {
+                        Button("Use the bundled guest again", role: .destructive) {
+                            runtime.resetGuest()
+                        }
+                    }
                     if let importError {
                         Text(importError).font(.caption).foregroundStyle(.red)
                     }
@@ -84,7 +100,7 @@ struct SetupView: View {
                     } label: {
                         Label("Start Alpine", systemImage: "play.fill")
                     }
-                    .disabled(!FileManager.default.fileExists(atPath: runtime.imageURL.path))
+                    .disabled(runtime.preparing != nil)
                 }
 
                 Section("Engine") {

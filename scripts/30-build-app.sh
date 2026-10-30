@@ -26,6 +26,19 @@ for blob in edk2-aarch64-code.fd edk2-arm-vars.fd; do
 done
 ls -lh "${APP}/AokVM/Resources"
 
+banner "guest image"
+# The guest travels inside the app: ~1 GiB of mostly zeroes compresses to a few
+# tens of MB and is unpacked into Application Support on first start.
+GUEST="${GUEST_IMAGE:-${ROOT}/build/guest/alpine.img}"
+if [ -f "$GUEST" ]; then
+    gzip -9 -c "$GUEST" > "${APP}/AokVM/Resources/${GUEST_BUNDLE_NAME:-alpine.img.gz}"
+    ls -lh "$GUEST" "${APP}/AokVM/Resources/alpine.img.gz"
+else
+    echo "warning: no guest image at $GUEST — the app will build without one"
+    echo "         (build it with scripts/20-make-alpine-image.sh, or set GUEST_IMAGE)"
+    rm -f "${APP}/AokVM/Resources/alpine.img.gz"
+fi
+
 banner "project"
 ( cd "$APP" && xcodegen generate --spec project.yml )
 

@@ -75,9 +75,13 @@ clones QEMU and finishes in minutes. `workflow_dispatch` with
 `publish_prebuilt` attaches both tarballs to a `prebuilt-<hash>` release for
 forks and offline builds. Details in [docs/CI.md](docs/CI.md).
 
-Install the .ipa with SideStore/AltStore/TrollStore, then import `alpine.img` through the
-app's Files importer. The guest boots to a login prompt on tty1 (the displayed framebuffer)
-and on ttyAMA0, whose output lands in `Documents/Logs/engine.log`. Root password `aok`.
+Install the .ipa with SideStore/AltStore/TrollStore. **The guest is inside it**: the build
+gzips `alpine.img` into the bundle (~100 MB of the ~145 MB IPA) and the app unpacks it into
+Application Support on the first start, with a progress bar. There is nothing to import.
+
+The guest boots to a login prompt on tty1 (the displayed framebuffer) and on ttyAMA0, whose
+output lands in `Documents/Logs/engine.log`. Root password `aok`. Importing a different image
+through the Files importer still works, and replaces the bundled one until you reset.
 
 ## State
 
