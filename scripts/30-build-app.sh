@@ -91,4 +91,4 @@ ls -lh "$IPA"
 shasum -a 256 "$IPA" | tee "${DIST}/$(basename "$IPA" .ipa).sha256"
 echo
 echo "Install with SideStore/AltStore/TrollStore, then import"
-echo "  $(basename "${OUT:-build/ut/ut-2404-arm64.img}")"
+echo "  build/guest/alpine.img"

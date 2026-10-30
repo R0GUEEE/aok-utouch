@@ -24,7 +24,7 @@ enum VMState: Equatable {
 }
 
 struct VMConfig: Codable, Equatable {
-    var imageName = "ut-2404-arm64.img"
+    var imageName = "alpine.img"
     var memoryMiB = 2560
     var cpus = 1
     /// Scanout size. Pixel count is the dominant cost under gadget

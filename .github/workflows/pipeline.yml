@@ -203,7 +203,7 @@ jobs:
         run: tail -120 build/xcodebuild.log || true
 
   image:
-    name: image (ut-2404-arm64.img)
+    name: image (alpine.img)
     if: github.event_name != 'workflow_dispatch' || inputs.build_image
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
@@ -213,22 +213,20 @@ jobs:
       - name: Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap parted dosfstools e2fsprogs mtools \
-            grub-efi-arm64-bin qemu-utils
+          sudo apt-get install -y parted dosfstools e2fsprogs grub-efi-arm64-bin
 
       - name: Build image
-        run: sudo bash scripts/20-make-ut-image.sh "$PWD/build/ut/ut-2404-arm64.img"
+        run: sudo bash scripts/20-make-alpine-image.sh "$PWD/build/guest/alpine.img"
 
       - name: Report
         run: |
-          ls -lh build/ut/
-          sudo losetup -f --show -P build/ut/ut-2404-arm64.img || true
-          sudo partx -s build/ut/ut-2404-arm64.img || true
+          ls -lh build/guest/
+          sudo partx -s build/guest/alpine.img || true
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ut-2404-arm64.img
-          path: build/ut/ut-2404-arm64.img
+          name: alpine.img
+          path: build/guest/alpine.img
           compression-level: 0
 
   publish:

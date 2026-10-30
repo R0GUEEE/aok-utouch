@@ -26,7 +26,7 @@ login prompt at 1024x768.
 
 ## M2 — Ubuntu Touch userland — *package selection verified*
 
-* `20-make-ut-image.sh --ut` adds `repo.ubports.com 24.04-1.x main` and installs the
+* `20-make-alpine-image.sh` is the shipping builder; a Lomiri variant would add
   mainline session set from `UBUNTU-TOUCH.md`.
 * `aok-lomiri.service` starts the session as `phablet` on tty1, no LightDM.
 
@@ -34,7 +34,7 @@ login prompt at 1024x768.
 `/dev/dri/card0`; no libhybris/Android dependency present (`apt-mark showmanual | grep -c hybris`
 = 0).
 
-## M3 — Lomiri on screen and interactive — *unbuilt*
+## M3 — Lomiri (deferred) on screen and interactive — *unbuilt*
 
 * Mir `gbm-kms` scanout reaches our listener; the shell's greeter-free home renders.
 * `virtio-tablet` drives the pointer; keyboard shortcuts reach the shell.
@@ -45,7 +45,7 @@ the device orientation (we rotate the Metal quad, not the guest).
 
 ## M4 — Performance decision — *unbuilt*
 
-Deterministic benchmark: scroll the Lomiri app drawer for 30 s while sampling
+Deterministic benchmark: scroll the Lomiri (deferred) app drawer for 30 s while sampling
 `dpy_gfx_update` rect area/second and host frame time; record fps, p95 frame time, guest
 CPU %, device temperature delta, and battery drop per 10 min.
 
@@ -87,7 +87,7 @@ without reading a README.
 | # | Risk | Likelihood | Mitigation |
 |---|---|---|---|
 | R1 | glib cross-build for iOS is the classic wall (gobject introspection, `iconv`, `libintl`) | High | Script builds glib with `-Dintrospection=disabled -Dlibmount=disabled -Dselinux=disabled`; fall back to UTM's prebuilt `glib-ios` |
-| R2 | llvmpipe in guest makes Lomiri unusable (see M4) | Medium | Resolution ladder, software Qt Quick backend, Mir software renderer |
+| R2 | llvmpipe in guest makes Lomiri (deferred) unusable (see M4) | Medium | Resolution ladder, software Qt Quick backend, Mir software renderer |
 | R3 | `virtio-9p` local backend needs xattr/`ftw` that iOS lacks | Medium | Drop 9p; use a second virtio-blk disk (FAT32) as the share — no host path sharing at all |
 | R4 | App Store review rejects an emulator that boots a full OS | Certain | Unsigned IPA distribution only; no Store build target |
 | R5 | Two vCPUs under TCTI/AOK thrash (`tb_flush`, region locks) | Medium | `-smp 1` default, tune at M4 |

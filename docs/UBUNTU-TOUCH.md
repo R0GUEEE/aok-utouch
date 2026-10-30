@@ -1,4 +1,10 @@
-# Ubuntu Touch on virtio hardware
+# Ubuntu Touch on virtio hardware (deferred)
+
+> **Deferred.** The shipping guest is a pre-configured Alpine rootfs
+> (`scripts/20-make-alpine-image.sh`); this page is kept because the analysis is
+> still correct if the Lomiri front end is picked up again. Nothing below is
+> built by CI today, and the Ubuntu image builder it refers to has been replaced by
+> `20-make-alpine-image.sh`.
 
 ## 1. What "port Ubuntu Touch" means here
 

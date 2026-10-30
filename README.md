@@ -1,14 +1,14 @@
 # aok-utouch
 
-A Linux VM backend for iOS built from three projects, with Ubuntu Touch's Lomiri running
-inside it as the app's user interface.
+A Linux VM backend for iOS built from three projects, running a pre-configured Alpine
+rootfs inside the app.
 
 | Piece | Repo | Role |
 |---|---|---|
 | Engine | [`emkey1/qemu`](https://github.com/emkey1/qemu) branch `aok-vm` (QEMU 11.1.2) | Full-system emulation with no runtime code generation: AOK gadget streams on top of the TCTI TCG backend |
 | Gadget sources | [`emkey1/aok-gadgets`](https://github.com/emkey1/aok-gadgets) | AArch64 gadget bodies, fused-pair tables, x87; retired 2026-10-14, copies now live in the engine |
 | Userland runtime | [`rcarmo/ios-linuxkit`](https://github.com/rcarmo/ios-linuxkit) | AArch64 Linux syscall layer + `fakefsify`; on-device shell and build/test host |
-| UI | Ubuntu Touch 24.04-1.x (`repo.ubports.com`), Lomiri + Mir | The front end, booted as a guest |
+| Guest | Alpine Linux 3.24 (aarch64), pre-configured | The operating system you get when the VM starts |
 
 ## Why this combination works
 
@@ -37,7 +37,7 @@ scripts/00-fetch.sh       clone + pin the three repos, install the glue
 scripts/05-build-deps.sh  pixman, pcre2, libffi, glib - static, for iPhoneOS
 scripts/09-restore-engine.sh   unpack a prebuilt engine instead of building it
 scripts/10-build-qemu-ios.sh   configure + build libqemu-system-aarch64.a
-scripts/20-make-ut-image.sh    Ubuntu 24.04 + UBports 24.04-1.x -> disk image (arm64 Linux host)
+scripts/20-make-alpine-image.sh  Alpine 3.24 aarch64 -> GPT disk image (arm64 Linux host)
 scripts/30-build-app.sh   XcodeGen + xcodebuild -> unsigned .ipa
 engine/aok-ios/           iOS platform layer: display listener, input bridge, VM thread
 app/AokVM/                SwiftUI app, Metal scanout, host keyboard, VM settings
@@ -53,7 +53,7 @@ host or VM for the guest image.
 ./scripts/00-fetch.sh                      # ~2.5 GB: QEMU + UT packages
 ./scripts/05-build-deps.sh                 # glib, pixman, pcre2, libffi -> build/ios-sysroot
 ./scripts/10-build-qemu-ios.sh             # -> build/qemu-ios/libqemu-system-aarch64.a
-sudo ./scripts/20-make-ut-image.sh         # -> build/ut/ut-2404-arm64.img
+sudo ./scripts/20-make-alpine-image.sh     # -> build/guest/alpine.img (~1 GB sparse, ~300 MB used)
 ./scripts/30-build-app.sh                  # -> dist/AokVM-unsigned.ipa
 ```
 
@@ -75,9 +75,9 @@ clones QEMU and finishes in minutes. `workflow_dispatch` with
 `publish_prebuilt` attaches both tarballs to a `prebuilt-<hash>` release for
 forks and offline builds. Details in [docs/CI.md](docs/CI.md).
 
-Install the .ipa with SideStore/AltStore/TrollStore, then import `ut-2404-arm64.img` through
-the app's Files importer. First boot takes 1–3 minutes under gadget interpretation; after
-that it is a normal Linux VM.
+Install the .ipa with SideStore/AltStore/TrollStore, then import `alpine.img` through the
+app's Files importer. The guest boots to a login prompt on tty1 (the displayed framebuffer)
+and on ttyAMA0, whose output lands in `Documents/Logs/engine.log`. Root password `aok`.
 
 ## State
 

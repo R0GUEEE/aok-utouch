@@ -44,8 +44,8 @@ struct SetupView: View {
                                        value: ByteCountFormatter.string(fromByteCount: bytes,
                                                                         countStyle: .file))
                     } else {
-                        Text("No image imported. Import a raw disk image built with " +
-                             "scripts/20-make-ut-image.sh.")
+                        Text("No image imported. Import the raw disk image built with " +
+                             "scripts/20-make-alpine-image.sh.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -82,7 +82,7 @@ struct SetupView: View {
                     Button {
                         runtime.start()
                     } label: {
-                        Label("Start Ubuntu Touch", systemImage: "play.fill")
+                        Label("Start Alpine", systemImage: "play.fill")
                     }
                     .disabled(!FileManager.default.fileExists(atPath: runtime.imageURL.path))
                 }

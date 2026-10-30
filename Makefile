@@ -14,7 +14,7 @@ qemu: deps
 	./scripts/10-build-qemu-ios.sh
 
 image:
-	sudo ./scripts/20-make-ut-image.sh
+	sudo ./scripts/20-make-alpine-image.sh
 
 app: qemu
 	./scripts/30-build-app.sh

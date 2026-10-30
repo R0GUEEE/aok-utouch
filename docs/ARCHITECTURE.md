@@ -15,8 +15,9 @@
 |   TCG with TCTI backend + AOK gadget front end (target/arm/tcg/aok)  |
 |   softmmu TLB, MMIO, virtio, slirp, edk2 pflash                      |
 +----------------------------------------------------------------------+
-| Ubuntu 24.04 arm64 guest + UBports 24.04-1.x                         |
-|   systemd -> seatd/logind -> Lomiri (Mir, gbm-kms) -> apps           |
+| Alpine Linux 3.24 aarch64 guest (pre-configured, OpenRC)             |
+|   kernel 6.18-virt, virtio-blk/gpu/net, busybox + apk, root password |
+|   `aok`; console on tty1 (framebuffer) and ttyAMA0 (serial)          |
 +----------------------------------------------------------------------+
 ```
 
@@ -68,7 +69,7 @@ Command line the app builds (one string per element, no shell):
 -drive if=pflash,format=raw,readonly=on,file=edk2-aarch64-code.fd
 -drive if=pflash,format=raw,file=edk2-arm-vars.fd
 -device virtio-ramfb                 # firmware console, then virtio-gpu scanout
--drive if=none,id=hd0,file=ut-2404-arm64.img,format=raw,cache=writeback
+-drive if=none,id=hd0,file=alpine.img,format=raw,cache=writeback
 -device virtio-blk-pci,drive=hd0
 -netdev user,id=n0 -device virtio-net-pci,netdev=n0
 -device virtio-keyboard-pci
@@ -80,12 +81,16 @@ Command line the app builds (one string per element, no shell):
 draws on the ramfb before the guest's virtio-gpu driver takes the console over, so firmware
 output and the Linux console arrive through the same listener.
 
-Disk layout produced by `20-make-ut-image.sh`:
+Disk layout produced by `20-make-alpine-image.sh`:
 
 ```
-p1  512 MiB  EFI System (FAT32)  grub arm64-efi, Image, initrd.img
-p2  rest     ext4                Ubuntu 24.04 + lomiri + ubuntu-touch-session
+p1  128 MiB  EFI System (FAT32)  grub arm64-efi, vmlinuz-virt, initramfs-virt, grub.cfg
+p2  rest     ext4                Alpine 3.24 + apk + OpenRC, ~300 MB used
 ```
+
+The guest is prepared, not assembled at runtime: hostname `aok`, DHCP on `eth0`, OpenRC
+services enabled (`hostname`, `networking`, `syslog`, `crond`), `mkinitfs` features
+`virtio ext4`, and gettys on `tty1`, `tty2` and `ttyAMA0`. Nothing depends on systemd.
 
 ## 4. Display pipeline
 
@@ -120,9 +125,9 @@ and posts one event per transition.
 
 1. **No `fork`, no `exec`.** One process, one thread group. `-daemonize`, `-runas`,
    `-sandbox` and every helper-process path are off.
-2. **No `PROT_EXEC`.** Also rules out `virtio-gpu-virgl`: no GL context to give it. Lomiri's
-   Mir runs on `gbm-kms` over virtio-gpu, so drawing inside the guest is QEMU's software
-   rasteriser. Budget 20–40 fps at 1280x720 on an M-class iPad, 8–20 on an A10X.
+2. **No `PROT_EXEC`.** Also rules out `virtio-gpu-virgl`: no GL context to give it. The guest
+   draws through virtio-gpu into a framebuffer QEMU rasterises in software, so the ceiling is
+   the console's text output, not a compositor's frame rate.
 3. **Memory.** 3 GiB is safe on an 8 GiB device; `VMRuntime` clamps against
    `os_proc_available_memory()`.
 4. **Signing.** Unsigned IPA -> SideStore/AltStore/TrollStore. No special entitlements: no
