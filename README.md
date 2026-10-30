@@ -81,7 +81,10 @@ that it is a normal Linux VM.
 
 ## State
 
-The engine and the UT package set are verified to exist as described. The iOS platform layer,
-the app and the build scripts in this tree have not been compiled on a Mac yet — this repo was
-written in an Alpine/iSH sandbox with no Xcode. `docs/PLAN.md` puts the link-and-boot proof at
-M0, and every script prints what it is about to do before doing it.
+The pipeline is green: run 41010497241 built `AokVM-unsigned.ipa` (25.5 MB, 342 MB binary,
+`NOUNDEFS`), the prebuilt engine, the iOS dependency sysroot and the 8.6 GB Ubuntu Touch image,
+all as downloadable artifacts. See [docs/STATUS.md](docs/STATUS.md) for sizes, hashes and what
+that does and does not prove.
+
+It proves the app links and packages. It does not prove the guest boots — the first launch on a
+device is still unwritten.
