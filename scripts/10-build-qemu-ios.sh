@@ -222,12 +222,40 @@ else
     done < "$LIST"
 
     # Anything still only reachable through a QEMU archive gets flattened too,
-    # after the direct objects, so the direct ones win any duplicate.
+    # but only members that bring something new: re-extracting the in-tree
+    # archives pulls in their copies of system_main.c.o and the 32-bit ARM
+    # stubs, which duplicate the real objects and collide with the app's @main.
     for archive in $(cat "$QEMU_ARCHIVES"); do
         EX="$WORK/.x"
         rm -rf "$EX"; mkdir -p "$EX"
         ( cd "$EX" && ar x "$archive" 2>/dev/null ) || continue
-        find "$EX" -name '*.o' -exec mv -n {} "$WORK"/ \;
+        python3 - "$EX" "$WORK" <<'PY'
+import os, subprocess, sys
+src, dst = sys.argv[1], sys.argv[2]
+
+def symbols(path):
+    try:
+        out = subprocess.run(["xcrun", "nm", "-gU", "--defined-only", path],
+                             capture_output=True, text=True, check=True).stdout
+    except subprocess.CalledProcessError:
+        return set()
+    return {line.split()[-1] for line in out.splitlines() if line.strip()}
+
+seen = set()
+for name in os.listdir(dst):
+    if name.endswith(".o"):
+        seen |= symbols(os.path.join(dst, name))
+
+for name in sorted(os.listdir(src)):
+    if not name.endswith(".o"):
+        continue
+    path = os.path.join(src, name)
+    defined = symbols(path)
+    if os.path.exists(os.path.join(dst, name)) or (defined and defined <= seen):
+        continue
+    os.replace(path, os.path.join(dst, name))
+    seen |= defined
+PY
     done
 
     # The set legitimately contains duplicate definitions: QEMU links stubs and
