@@ -223,7 +223,8 @@ jobs:
       - name: Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y parted dosfstools e2fsprogs grub-efi-arm64-bin
+          # debootstrap for the Ubuntu Touch guest, the rest for both.
+          sudo apt-get install -y debootstrap parted dosfstools e2fsprogs grub-efi-arm64-bin
 
       - name: Build Alpine guest
         run: sudo bash scripts/20-make-alpine-image.sh "$PWD/build/guest/alpine.img"
