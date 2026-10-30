@@ -14,7 +14,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${1:-${ROOT}/build/guest/ut.img}"
-SIZE="${SIZE:-3500M}"
+SIZE="${SIZE:-5G}"
 ESP_MB="${ESP_MB:-512}"
 ARCH=arm64
 MIRROR="${MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
@@ -122,6 +122,8 @@ chmod +x "$MNT/usr/sbin/policy-rc.d"
 export DEBIAN_FRONTEND=noninteractive
 
 banner "base system"
+# Not silenced: a dpkg failure here is the one place where the reason matters
+# more than the log length, and -qq plus >/dev/null threw it away.
 chroot "$MNT" apt-get update -qq
 chroot "$MNT" apt-get install -y -qq --no-install-recommends \
     ca-certificates curl gnupg \
@@ -131,8 +133,7 @@ chroot "$MNT" apt-get install -y -qq --no-install-recommends \
     locales tzdata sudo less nano \
     systemd-timesyncd systemd-resolved network-manager \
     seatd libgl1-mesa-dri libegl1 libgles2 mesa-utils \
-    fonts-ubuntu fontconfig udev kmod \
-    >/dev/null
+    fonts-ubuntu fontconfig udev kmod
 
 # linux-modules-extra has no meta package on arm64; take the newest ABI build
 # if one exists. Nothing on the virtio path lives there — it is insurance for
