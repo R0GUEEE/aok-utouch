@@ -100,12 +100,9 @@ EOF
 
 # The UBports archive is HTTPS and the freshly bootstrapped root has no CA
 # store yet, so its source is added after ca-certificates is installed.
-# Flatpak and snap are noise in a VM.
-cat > "$MNT/etc/apt/preferences.d/no-snap" <<'EOF'
-Package: snapd
-Pin: release a=*
-Pin-Priority: -10
-EOF
+# snapd is not optional here: ubuntu-touch-core depends on it, and pinning it
+# away made the entire Lomiri stack uninstallable. It is installed and then
+# masked - the VM does not want a background snap daemon.
 
 cp /etc/resolv.conf "$MNT/etc/resolv.conf"
 mkdir -p "$MNT/proc" "$MNT/sys" "$MNT/dev" "$MNT/dev/pts" "$MNT/run"
@@ -239,6 +236,11 @@ RestartSec=3
 WantedBy=graphical.target
 EOF
 
+# Installed because a dependency demands it, masked because nothing in this VM
+# should be refreshing snaps behind our back.
+chroot "$MNT" systemctl mask snapd.service snapd.socket snapd.seeded.service || true
+chroot "$MNT" systemctl disable snapd.service snapd.socket || true
+
 chroot "$MNT" systemctl set-default graphical.target
 chroot "$MNT" systemctl enable aok-lomiri.service seatd.service NetworkManager.service
 chroot "$MNT" systemctl mask getty@tty1.service || true
@@ -258,9 +260,14 @@ cat > "$MNT/etc/fstab" <<'EOF'
 EOF
 
 banner "trim"
-chroot "$MNT" apt-get purge -y -qq snapd apport whoopsie unattended-upgrades \
-    ubuntu-report modemmanager bluez wpa_supplicant tracker tracker-miner-fs \
-    cloud-init >/dev/null 2>&1 || true
+# One package at a time, each allowed to fail: a postrm script that exits
+# non-zero used to take the whole build down at this point.
+for pkg in apport whoopsie unattended-upgrades ubuntu-report modemmanager \
+           bluez wpa_supplicant tracker tracker-miner-fs cloud-init; do
+    chroot "$MNT" dpkg -s "$pkg" >/dev/null 2>&1 || continue
+    chroot "$MNT" apt-get purge -y -qq "$pkg" >/dev/null 2>&1 \
+        || echo "  note: could not purge $pkg" >&2
+done
 chroot "$MNT" apt-get autoremove -y -qq >/dev/null
 
 banner "strip"
