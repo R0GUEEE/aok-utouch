@@ -14,7 +14,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${1:-${ROOT}/build/guest/ut.img}"
-SIZE="${SIZE:-5G}"
+SIZE="${SIZE:-3500M}"
 ESP_MB="${ESP_MB:-512}"
 ARCH=arm64
 MIRROR="${MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
@@ -327,7 +327,8 @@ trap - EXIT
 
 banner "result"
 ls -lh "$OUT"
-e2fsck -fn "${OUT}" 2>/dev/null | head -3 || true
+# e2fsck on the image file sees the partition table, not a filesystem; the
+# filesystem was fsck-clean when it was unmounted a moment ago.
 rm -rf "$MNT"
 echo
 echo "Bundle it with: GUEST_IMAGE=$OUT bash scripts/30-build-app.sh"
