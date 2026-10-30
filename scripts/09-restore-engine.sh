@@ -32,8 +32,15 @@ COUNT_HAVE="$(find "${ROOT}/build/qemu-ios/flatten" -name '*.o' 2>/dev/null | wc
 echo "link inputs listed: ${COUNT_WANT:-none}, objects present: ${COUNT_HAVE:-0}"
 [ "${COUNT_HAVE:-0}" -gt 700 ] || {
     echo "error: tarball has no flat engine objects" >&2; exit 1; }
+# Absolute paths from the build machine are rewritten to this checkout's copy,
+# so the response file the app links with is valid wherever it was unpacked.
+LIST="${ROOT}/build/qemu-ios/engine-link-inputs.txt"
+if [ -f "$LIST" ]; then
+    sed -i.bak -E "s|^/[^ ]*/build/qemu-ios/support-archives/|${ROOT}/build/qemu-ios/support-archives/|" "$LIST"
+    rm -f "$LIST.bak"
+fi
 MISSING=0
-for archive in $(grep '\.a$' "${ROOT}/build/qemu-ios/engine-link-inputs.txt" 2>/dev/null); do
+for archive in $(grep '\.a$' "$LIST" 2>/dev/null); do
     if [ ! -f "$archive" ]; then
         # Paths are absolute from the machine that built the tarball; resolve
         # the basename against the support-archives directory instead.
