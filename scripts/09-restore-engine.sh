@@ -49,6 +49,11 @@ for line in open(list_path):
     name = os.path.basename(entry)
     if entry.endswith(".o"):
         path = os.path.join(base, "flatten", name)
+        # The builder keeps one file per Meson object name; anything not found
+        # under its basename is a stale list, not something to guess about.
+        if not os.path.isfile(path):
+            print(f"warning: object missing: {name}", file=sys.stderr)
+            continue
         if path in seen_objects:
             continue
         seen_objects.add(path)

@@ -46,6 +46,16 @@ mkdir -p "$DIST"
 APP_BUNDLE="${BUILD}/app/Build/Products/Release-iphoneos/AokVM.app"
 [ -d "$APP_BUNDLE" ] || die "no app bundle at $APP_BUNDLE"
 
+banner "verify the link list"
+# _main in the response file means a QEMU object was copied under a colliding
+# name; the app has its own @main and would link two.
+if grep -q 'system_main\.c\.o' "$LIST"; then
+    MAIN_COUNT="$(grep -c 'system_main\.c\.o' "$LIST")"
+    [ "$MAIN_COUNT" -eq 1 ] || {
+        echo "error: $MAIN_COUNT objects named *system_main.c.o in the link list" >&2
+        exit 1; }
+fi
+
 banner "verify the binary"
 # qemu_init must be inside, and the engine's own main() must not be: the app's
 # entry point is @main in Swift.
