@@ -39,6 +39,29 @@ Both files are checked-in blobs in `pc-bios`, so they now ship in the bundle and
 passes `-L <bundle>/pc-bios`: 43 ROM files, 4.3 MB, `vgabios-ramfb.bin` and `efi-virtio.rom`
 among them. The app build asserts those two exist, so this cannot regress silently.
 
+### Second device run
+
+With the ROMs shipped, the next run got past device creation and died at module init:
+
+```
+ran out of space in drive_config_groups
+```
+
+`util/qemu-config.c` holds drive-interface registrations in a fixed array
+(`QemuOptsList *drive_config_groups[5]`, four plus a terminator) and
+`qemu_add_drive_opts()` calls `abort()` when it is full. This happens while QEMU's
+modules register themselves — before a single argument is parsed — so no command line can
+avoid it; this link simply contains more block interfaces than upstream's. `scripts/00-fetch.sh`
+now widens the table to 32 and says so in the build log:
+
+```
+widened drive_config_groups: 5 -> 32
+```
+
+That is the third edit applied to the engine at fetch time, after renaming `main()` and
+staging `pc-bios`. The app also writes the exact argv to `Documents/Logs/last-args.txt`
+before every start, so the next report can say what QEMU was actually given.
+
 ## How the engine is packaged (this changed)
 
 It is **not** a static archive. QEMU links the emulator with
