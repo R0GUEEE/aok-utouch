@@ -170,10 +170,13 @@ ls -l "$MNT/boot/" | sed 's/^/  /'
 banner "boot loader"
 # grub comes from the host: the guest needs a kernel and a loader that the
 # firmware can find, not grub packages of its own.
+[ -s "$MNT/boot/vmlinuz-virt" ] || die "no kernel at /boot/vmlinuz-virt"
+[ -s "$MNT/boot/initramfs-virt" ] || die "no initramfs: mkinitfs failed in the chroot"
 install -Dm644 "$MNT/boot/vmlinuz-virt" "$MNT/boot/efi/vmlinuz-virt"
 install -Dm644 "$MNT/boot/initramfs-virt" "$MNT/boot/efi/initramfs-virt"
+mkdir -p "$MNT/boot/efi/grub"
 
-cat > "$MNT/boot/efi/grub.cfg" <<'EOF'
+cat > "$MNT/boot/efi/grub/grub.cfg" <<'EOF'
 set timeout=1
 set default=0
 
@@ -188,13 +191,13 @@ menuentry "Alpine Linux (quiet)" {
 }
 EOF
 
+# --boot-directory is the ESP itself, so grub's prefix is (hd0,gpt1)/grub and
+# the config has to live at /grub/grub.cfg - not at /grub.cfg.
 grub-install --target=arm64-efi --efi-directory="$MNT/boot/efi" \
     --boot-directory="$MNT/boot/efi" --removable --no-nvram \
-    --modules="part_gpt part_msdos fat ext2 normal linux configfile echo" \
+    --modules="part_gpt part_msdos fat ext2 normal linux configfile echo search" \
     >/dev/null
-# --boot-directory is the ESP here, so grub looks for grub.cfg at /EFI/BOOT/;
-# keep a copy where both the removable path and a normal install would find it.
-cp "$MNT/boot/efi/grub.cfg" "$MNT/boot/efi/EFI/BOOT/grub.cfg"
+cp "$MNT/boot/efi/grub/grub.cfg" "$MNT/boot/efi/EFI/BOOT/grub.cfg"
 ls -l "$MNT/boot/efi/EFI/BOOT/" | sed 's/^/  /'
 
 banner "report"
