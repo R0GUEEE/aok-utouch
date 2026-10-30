@@ -201,8 +201,9 @@ cp "$MNT/boot/efi/grub/grub.cfg" "$MNT/boot/efi/EFI/BOOT/grub.cfg"
 ls -l "$MNT/boot/efi/EFI/BOOT/" | sed 's/^/  /'
 
 banner "report"
-du -sh "$MNT" 2>/dev/null | sed 's/^/  rootfs: /'
-df -h "$MNT" | sed -n '2p' | sed 's/^/  /'
+du -sh "$MNT" 2>/dev/null | sed 's/^/  rootfs: /' || true
+du -sh "$MNT/boot/efi" 2>/dev/null | sed 's/^/  esp: /' || true
+find "$MNT/boot/efi" -maxdepth 2 -type f 2>/dev/null | sed 's/^/  /' || true
 
 banner "unmount"
 for d in dev/pts dev proc sys run boot/efi; do
