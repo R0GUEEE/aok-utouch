@@ -98,7 +98,9 @@ final class VMRuntime: ObservableObject {
 
     /// What the next start will boot, for the UI to show.
     var activeGuestLabel: String {
-        importedImageURL == nil ? "Alpine (bundled)" : config.imageName
+        importedImageURL == nil
+            ? (GuestImage.bundledLabel ?? "Bundled guest")
+            : config.imageName
     }
 
     /// Size of the active image, if it can be read.

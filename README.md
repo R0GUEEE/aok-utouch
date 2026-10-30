@@ -8,7 +8,7 @@ rootfs inside the app.
 | Engine | [`emkey1/qemu`](https://github.com/emkey1/qemu) branch `aok-vm` (QEMU 11.1.2) | Full-system emulation with no runtime code generation: AOK gadget streams on top of the TCTI TCG backend |
 | Gadget sources | [`emkey1/aok-gadgets`](https://github.com/emkey1/aok-gadgets) | AArch64 gadget bodies, fused-pair tables, x87; retired 2026-10-14, copies now live in the engine |
 | Userland runtime | [`rcarmo/ios-linuxkit`](https://github.com/rcarmo/ios-linuxkit) | AArch64 Linux syscall layer + `fakefsify`; on-device shell and build/test host |
-| Guest | Alpine Linux 3.24 (aarch64), pre-configured | The operating system you get when the VM starts |
+| Guest | Alpine 3.24 **or** Ubuntu Touch 24.04-1.x | Two images ship-ready; the app bundles whichever the build selected |
 
 ## Why this combination works
 
@@ -37,7 +37,8 @@ scripts/00-fetch.sh       clone + pin the three repos, install the glue
 scripts/05-build-deps.sh  pixman, pcre2, libffi, glib - static, for iPhoneOS
 scripts/09-restore-engine.sh   unpack a prebuilt engine instead of building it
 scripts/10-build-qemu-ios.sh   configure + build libqemu-system-aarch64.a
-scripts/20-make-alpine-image.sh  Alpine 3.24 aarch64 -> GPT disk image (arm64 Linux host)
+scripts/20-make-alpine-image.sh  Alpine 3.24 aarch64 -> GPT disk image (~1 GB, 175 MB used)
+scripts/20-make-ut-image.sh      Ubuntu 24.04 + UBports 24.04-1.x + Lomiri -> GPT image (~5 GB)
 scripts/30-build-app.sh   XcodeGen + xcodebuild -> unsigned .ipa
 engine/aok-ios/           iOS platform layer: display listener, input bridge, VM thread
 app/AokVM/                SwiftUI app, Metal scanout, host keyboard, VM settings
@@ -53,7 +54,8 @@ host or VM for the guest image.
 ./scripts/00-fetch.sh                      # ~2.5 GB: QEMU + UT packages
 ./scripts/05-build-deps.sh                 # glib, pixman, pcre2, libffi -> build/ios-sysroot
 ./scripts/10-build-qemu-ios.sh             # -> build/qemu-ios/libqemu-system-aarch64.a
-sudo ./scripts/20-make-alpine-image.sh     # -> build/guest/alpine.img (~1 GB sparse, ~300 MB used)
+sudo ./scripts/20-make-alpine-image.sh     # -> build/guest/alpine.img  (small guest)
+sudo ./scripts/20-make-ut-image.sh         # -> build/guest/ut.img      (Ubuntu Touch + Lomiri)
 ./scripts/30-build-app.sh                  # -> dist/AokVM-unsigned.ipa
 ```
 

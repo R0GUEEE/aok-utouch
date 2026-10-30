@@ -8,7 +8,7 @@ import os
 /// of the user's Documents. Importing an image by hand still wins, and a reset
 /// puts the bundled one back.
 enum GuestImage {
-    static let bundledName = "alpine.img.gz"
+    static let bundledName = "guest.img.gz"
     static let installedName = "guest.img"
 
     struct Failure: LocalizedError {
@@ -28,7 +28,17 @@ enum GuestImage {
     }
 
     static var bundledURL: URL? {
-        Bundle.main.url(forResource: "alpine", withExtension: "img.gz")
+        Bundle.main.url(forResource: "guest", withExtension: "img.gz")
+    }
+
+    /// What the build called this guest, from guest.json in the bundle.
+    static var bundledLabel: String? {
+        guard let url = Bundle.main.url(forResource: "guest", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let name = object["name"] as? String, !name.isEmpty
+        else { return nil }
+        return name
     }
 
     static var installedSize: Int64 {

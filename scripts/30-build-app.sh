@@ -39,16 +39,28 @@ done
 du -sh "${APP}/AokVM/Resources/pc-bios"
 
 banner "guest image"
-# The guest travels inside the app: ~1 GiB of mostly zeroes compresses to a few
-# tens of MB and is unpacked into Application Support on first start.
-GUEST="${GUEST_IMAGE:-${ROOT}/build/guest/alpine.img}"
-if [ -f "$GUEST" ]; then
-    gzip -9 -c "$GUEST" > "${APP}/AokVM/Resources/${GUEST_BUNDLE_NAME:-alpine.img.gz}"
-    ls -lh "$GUEST" "${APP}/AokVM/Resources/alpine.img.gz"
+# The guest travels inside the app and is unpacked into Application Support on
+# first start. One slot, whichever image the build was pointed at: Alpine is the
+# small one, Ubuntu Touch is the interesting one.
+GUEST="${GUEST_IMAGE:-}"
+if [ -z "$GUEST" ]; then
+    for candidate in "${ROOT}/build/guest/alpine.img" "${ROOT}/build/guest/ut.img"; do
+        if [ -f "$candidate" ]; then GUEST="$candidate"; break; fi
+    done
+fi
+rm -f "${APP}/AokVM/Resources/guest.img.gz" "${APP}/AokVM/Resources/guest.json"
+if [ -n "$GUEST" ] && [ -f "$GUEST" ]; then
+    NAME="$(sed -n 's/^name=//p' "${GUEST%.img}.manifest" 2>/dev/null | head -1)"
+    [ -n "$NAME" ] || NAME="$(basename "$GUEST" .img)"
+    gzip -9 -c "$GUEST" > "${APP}/AokVM/Resources/guest.img.gz"
+    cat > "${APP}/AokVM/Resources/guest.json" <<EOF
+{"name": "${NAME}", "source": "$(basename "$GUEST")"}
+EOF
+    ls -lh "$GUEST" "${APP}/AokVM/Resources/guest.img.gz"
+    echo "bundled guest: ${NAME}"
 else
-    echo "warning: no guest image at $GUEST — the app will build without one"
-    echo "         (build it with scripts/20-make-alpine-image.sh, or set GUEST_IMAGE)"
-    rm -f "${APP}/AokVM/Resources/alpine.img.gz"
+    echo "warning: no guest image found — the app will build without one"
+    echo "         (scripts/20-make-alpine-image.sh or scripts/20-make-ut-image.sh)"
 fi
 
 banner "project"

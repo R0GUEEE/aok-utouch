@@ -167,6 +167,16 @@ chroot "$MNT" mkinitfs -o /boot/initramfs-virt "$(ls "$MNT/lib/modules" | head -
 
 ls -l "$MNT/boot/" | sed 's/^/  /'
 
+banner "manifest"
+ROOT_MB="$(du -sm "$MNT" | cut -f1)"
+cat > "${OUT%.img}.manifest" <<EOF
+guest=alpine
+name=Alpine ${REL} (OpenRC)
+built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+root_used_mb=${ROOT_MB}
+EOF
+sed 's/^/  /' "${OUT%.img}.manifest"
+
 banner "boot loader"
 # grub comes from the host: the guest needs a kernel and a loader that the
 # firmware can find, not grub packages of its own.

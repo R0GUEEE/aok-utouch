@@ -27,9 +27,14 @@ on:
         type: boolean
         default: false
       build_image:
-        description: Build the Ubuntu Touch disk image
+        description: Build the guest images
         type: boolean
         default: true
+      guest:
+        description: Which guest to bundle into the IPA
+        type: choice
+        options: [alpine, ut]
+        default: alpine
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -191,7 +196,8 @@ jobs:
         # No QEMU checkout, no glib build, no meson: only Swift, C, the .metal
         # shaders and the gzip of the guest image.
         env:
-          GUEST_IMAGE: build/prebuilt/alpine.img
+          # workflow_dispatch input, or alpine for a plain push.
+          GUEST_IMAGE: build/prebuilt/${{ inputs.guest || 'alpine' }}.img
         run: bash scripts/30-build-app.sh
 
       - uses: actions/upload-artifact@v4
@@ -207,7 +213,7 @@ jobs:
         run: tail -120 build/xcodebuild.log || true
 
   image:
-    name: image (alpine.img)
+    name: images (alpine.img, ut.img)
     if: github.event_name != 'workflow_dispatch' || inputs.build_image
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 90
@@ -219,18 +225,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y parted dosfstools e2fsprogs grub-efi-arm64-bin
 
-      - name: Build image
+      - name: Build Alpine guest
         run: sudo bash scripts/20-make-alpine-image.sh "$PWD/build/guest/alpine.img"
+
+      - name: Build Ubuntu Touch guest
+        # The heavy one: debootstrap + the UBports suite + Lomiri. About ten
+        # minutes, ~1.1 GB compressed, and the only guest that shows a UI.
+        run: sudo bash scripts/20-make-ut-image.sh "$PWD/build/guest/ut.img"
 
       - name: Report
         run: |
           ls -lh build/guest/
+          cat build/guest/*.manifest
           sudo partx -s build/guest/alpine.img || true
+          sudo partx -s build/guest/ut.img || true
 
       - uses: actions/upload-artifact@v4
         with:
           name: alpine.img
-          path: build/guest/alpine.img
+          path: |
+            build/guest/alpine.img
+            build/guest/alpine.manifest
+          compression-level: 0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ut.img
+          path: |
+            build/guest/ut.img
+            build/guest/ut.manifest
           compression-level: 0
 
   publish:
