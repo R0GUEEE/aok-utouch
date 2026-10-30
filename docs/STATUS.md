@@ -24,6 +24,30 @@ The disc image was checked locally, not just built: GPT signature `EFI PART`, pa
 The binary contains `qemu-system-aarch64` and `aok-engine`, and `file(1)` reports
 `flags:<NOUNDEFS|DYLDLINK|TWOLEVEL|PIE>`, so nothing is missing at load time.
 
+## Two guests, 2026-10-30
+
+Both builders write an image plus a manifest, and the IPA bundles whichever one it was
+pointed at:
+
+| Guest | Image | Used | Bundled `.gz` | IPA |
+|---|---|---|---|---|
+| Alpine 3.24.3 | 1.0 GiB | 146 MB | 96 MB | 128 MB |
+| Ubuntu Touch 24.04-1.x | 5.0 GiB | 2,459 MB | 1.4 GB | 1.48 GB |
+
+`workflow_dispatch` with `guest=ut` produces the Ubuntu Touch build
+([41077358131](https://github.com/R0GUEEE/aok-utouch/actions/runs/41077358131)); a plain push
+builds Alpine. Three things that had to be got right for the Ubuntu Touch image:
+
+* `ubuntu-touch-core` **depends on snapd**. Pinning snapd away made
+  `ubuntu-touch-session`, `ubuntu-touch-core-mainline`, `ubuntu-touch-settings`, `qtmir` and
+  both `mir-platform-*` uninstallable — the image had no Lomiri at all. It is installed and
+  then masked.
+* Trimming must not be able to fail: Ubuntu Touch's maintainer scripts expect a running
+  systemd (`bluez`), and a purge in a chroot left dpkg half-configured and killed the build
+  with exit 100. The trim runs in a subshell with `-e` off and repairs dpkg afterwards.
+* Freed blocks keep their old contents, so gzip was compressing 5 GB of half-live data into
+  3.0 GB. `zerofree` on the loop device after unmount took the bundle from 3.0 GB to 1.4 GB.
+
 ## First device run, 2026-10-30
 
 The app launched and got as far as building the machine, then `qemu_init` exited:
