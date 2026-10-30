@@ -36,7 +36,10 @@ echo "link inputs listed: ${COUNT_WANT:-none}, objects present: ${COUNT_HAVE:-0}
 # so the response file the app links with is valid wherever it was unpacked.
 LIST="${ROOT}/build/qemu-ios/engine-link-inputs.txt"
 if [ -f "$LIST" ]; then
-    sed -i.bak -E "s|^/[^ ]*/build/qemu-ios/support-archives/|${ROOT}/build/qemu-ios/support-archives/|" "$LIST"
+    sed -i.bak -E \
+        -e "s|^/[^ ]*/build/qemu-ios/support-archives/|${ROOT}/build/qemu-ios/support-archives/|" \
+        -e "s|^/[^ ]*/build/qemu-ios/flatten/|${ROOT}/build/qemu-ios/flatten/|" \
+        "$LIST"
     rm -f "$LIST.bak"
 fi
 MISSING=0
