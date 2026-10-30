@@ -208,11 +208,15 @@ else
     # extract_all_objects() result, and it is the only thing that matters.
     WORK="$OUT/flatten"
     rm -rf "$WORK"; mkdir -p "$WORK"
+    # Keep Meson's own name for each object. Deriving one from the path (by
+    # replacing '/') collapses libsystem.a.p_system_main.c.o and
+    # qemu-system-aarch64-unsigned.p_system_main.c.o into the same file, and the
+    # copy that survives then defines _main - which the app links twice.
     while read -r input; do
         case "$input" in
             \#*) continue ;;
             *.o)
-                cp "$OUT/$input" "$WORK/$(echo "$input" | tr '/' '_')" 2>/dev/null || true
+                cp "$OUT/$input" "$WORK/$(basename "$input")" 2>/dev/null || true
                 ;;
         esac
     done < "$LIST"
